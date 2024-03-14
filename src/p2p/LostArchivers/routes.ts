@@ -28,6 +28,7 @@ import { deserializeLostArchiverInvestigateReq } from '../../types/LostArchiverI
 import { getStreamWithTypeCheck } from '../../types/Helpers'
 import { TypeIdentifierEnum } from '../../types/enum/TypeIdentifierEnum'
 import { safeStringify } from '../../utils'
+import { checkGossipPayload } from '../../utils/GossipValidation'
 
 /** Gossip */
 
@@ -43,10 +44,15 @@ const lostArchiverUpGossip: GossipHandler<SignedObject<ArchiverUpMsg>, Node['id'
   if (config.p2p.enableLostArchiversCycles === false) {
     return
   }
-
-  // Ignore gossip outside of Q1 and Q2
-  if (![1, 2].includes(currentQuarter)) {
-    logging.warn('lostArchiverUpGossip: not in Q1 or Q2')
+  // Validate the payload structure and types and check if the node is in Q1 or Q2
+  if (
+    !checkGossipPayload(
+      payload,
+      { type: 's', downMsg: 'o', refuteMsg: 'o', cycle: 's', sign: 'o' },
+      'lostArchiverUpGossip',
+      sender
+    )
+  ) {
     return
   }
 
@@ -54,9 +60,9 @@ const lostArchiverUpGossip: GossipHandler<SignedObject<ArchiverUpMsg>, Node['id'
   logging.info(`lostArchiverUpGossip: payload: ${inspect(payload)}, sender: ${sender}, tracker: ${tracker}`)
 
   // check args
-  if (!payload) { logging.warn(`lostArchiverUpGossip: missing payload`); return }
-  if (!sender) { logging.warn(`lostArchiverUpGossip: missing sender`); return }
-  if (!tracker) { logging.warn(`lostArchiverUpGossip: missing tracker`); return }
+  /* prettier-ignore */ if (!sender) { logging.warn(`lostArchiverUpGossip: missing sender`); return }
+  /* prettier-ignore */ if (!tracker) { logging.warn(`lostArchiverUpGossip: missing tracker`); return }
+
   const error = funcs.errorForArchiverUpMsg(payload)
   if (error) {
     nestedCountersInstance.countEvent('lostArchivers', `lostArchiverUpGossip invalid payload ${error}`)      
@@ -102,16 +108,21 @@ const lostArchiverDownGossip: GossipHandler<SignedObject<ArchiverDownMsg>, Node[
     return
   }
 
-  // Ignore gossip outside of Q1 and Q2
-  if (![1, 2].includes(currentQuarter)) {
-    logging.warn('lostArchiverUpGossip: not in Q1 or Q2')
+  // Ignore gossip outside of Q1 and Q2, plus check the payload structure and types
+  if (
+    !checkGossipPayload(
+      payload,
+      { type: 's', investigateMsg: 'o', cycle: 's', sign: 'o' },
+      'lostArchiverDownGossip',
+      sender
+    )
+  ) {
     return
   }
 
   logging.info(`lostArchiverDownGossip: payload: ${inspect(payload)}, sender: ${sender}, tracker: ${tracker}`)
 
   // check args
-  if (!payload) { logging.warn(`lostArchiverDownGossip: missing payload`); return }
   if (!sender) { logging.warn(`lostArchiverDownGossip: missing sender`); return }
   if (!tracker) { logging.warn(`lostArchiverDownGossip: missing tracker`); return }
   const error = funcs.errorForArchiverDownMsg(payload)

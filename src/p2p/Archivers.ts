@@ -34,6 +34,7 @@ import { ActiveNode } from '@shardus/types/build/src/p2p/SyncTypes'
 import { Result, ResultAsync } from 'neverthrow'
 import { safeStringify } from '../utils'
 import { arch } from 'os'
+import { checkGossipPayload } from '../utils/GossipValidation'
 
 const clone = rfdc()
 
@@ -926,6 +927,19 @@ export function registerRoutes() {
   Comms.registerGossipHandler('joinarchiver', async (payload, sender, tracker) => {
     profilerInstance.scopedProfileSectionStart('joinarchiver')
     try {
+      // Ignore gossip outside of Q1 and Q2
+      // If the sender is the original sender check if in Q1 to accept the request
+      if (
+        !checkGossipPayload(
+          payload,
+          { nodeInfo: 'o', requestType: 's', requestTimestamp: 'n', sign: 'o' },
+          'joinarchiver',
+          sender
+        )
+      ) {
+        return
+      }
+
       if (logFlags.console) console.log('Join request gossip received:', payload)
       const accepted = await addArchiverJoinRequest(payload, tracker, false)
       if (logFlags.console) {
