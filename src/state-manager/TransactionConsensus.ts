@@ -1433,6 +1433,9 @@ class TransactionConsenus {
                 this.mainLogger.debug(
                   `tryProduceReceipt: ${queueEntry.logID} received a confirm message. We have enough challenge messages which is better`
                 )
+              console.log(
+                `BLUE: ${queueEntry.logID} received a confirm message from RQ. We have enough challenge messages which is better`
+              )
               queueEntry.appliedReceipt = appliedReceipt
               queueEntry.appliedReceipt2 = appliedReceipt2
               return appliedReceipt
@@ -1486,16 +1489,28 @@ class TransactionConsenus {
                 'consensus',
                 'tryProduceReceipt robustQueryConfirmOrChallenge is NOT better'
               )
+              console.log(
+                `BLUE: ${queueEntry.logID} received challenge from RQ but it's not better than ours`
+              )
               queueEntry.appliedReceipt = appliedReceipt
               queueEntry.appliedReceipt2 = appliedReceipt2
               return appliedReceipt
             }
           }
 
+          if (
+            queueEntry.receivedBestChallenge &&
+            queueEntry.receivedBestChallenger &&
+            queueEntry.uniqueChallengesCount < this.config.stateManager.minRequiredChallenges
+          ) {
+            console.log(`BLUE: ${queueEntry.logID} we have a challenge message but not enough challenges`)
+          }
+
           // create receipt
           // The receipt for the transactions is the lowest ranked challenge message or if there is no challenge the lowest ranked confirm message
           // loop through "confirm" messages and "challenge" messages to decide the final receipt
           if (queueEntry.receivedBestConfirmation && queueEntry.receivedBestConfirmedNode) {
+            console.log(`BLUE: ${queueEntry.logID} we have a confirm message for this TX`)
             const winningVote = queueEntry.receivedBestConfirmation.appliedVote
             const appliedReceipt: AppliedReceipt = {
               txid: winningVote.txid,
@@ -1529,6 +1544,7 @@ class TransactionConsenus {
             // (lower the rank of confirm message, the better the receipt is)
             const robustQueryResult = await this.robustQueryConfirmOrChallenge(queueEntry)
             const robustConfirmOrChallenge = robustQueryResult?.result
+            const robustUniqueCount = robustQueryResult?.uniqueCount
 
             if (this.stateManager.consensusLog) {
               this.mainLogger.debug(
@@ -1552,6 +1568,15 @@ class TransactionConsenus {
 
             // Received challenge receipt, we have confirm receipt which is not as strong as challenge receipt
             if (robustConfirmOrChallenge.message === 'challenge') {
+              console.log(
+                `BLUE: ${queueEntry.logID} we have a confirm message but we received a challenge message from RQ`
+              )
+
+              if (robustUniqueCount < this.config.stateManager.minRequiredChallenges) {
+                console.log(
+                  `BLUE: ${queueEntry.logID} ALERT RQ gave challenge message but not enough challenges`
+                )
+              }
               nestedCountersInstance.countEvent(
                 'consensus',
                 'tryProduceReceipt robustQueryConfirmOrChallenge is challenge, we have confirmation'
@@ -1643,6 +1668,7 @@ class TransactionConsenus {
               'consensus',
               'tryProduceReceipt waitedEnough: true. no confirm or challenge received'
             )
+            console.log(`BLUE: ${queueEntry.logID} waited enough but no confirm or challenge received`)
             return null
           }
         } else {
