@@ -17,7 +17,7 @@ export type TxDebug = {
 }
 
 export type QueueEntry = {
-  gossipedCompleteData: boolean;
+  gossipedCompleteData: boolean
   eligibleNodeIdsToVote: Set<string>
   eligibleNodeIdsToConfirm: Set<string>
   acceptedTx: Shardus.AcceptedTx
@@ -106,7 +106,7 @@ export type QueueEntry = {
   completedConfirmedOrChallenge: boolean
   acceptVoteMessage: boolean
   acceptConfirmOrChallenge: boolean
-  uniqueChallenges: { [key: string]: ConfirmOrChallengeMessage }
+  uniqueChallenges: Set<string>
   uniqueChallengesCount: number
   robustAccountDataPromises?: { [key: string]: Promise<Shardus.WrappedData> }
   queryingRobustVote?: boolean

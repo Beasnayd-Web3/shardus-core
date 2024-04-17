@@ -1886,7 +1886,7 @@ class TransactionQueue {
         gossipedConfirmOrChallenge: false,
         completedConfirmedOrChallenge: false,
         uniqueChallengesCount: 0,
-        uniqueChallenges: {},
+        uniqueChallenges: new Set<string>(),
         archived: false,
         ourTXGroupIndex: -1,
         ourExGroupIndex: -1,

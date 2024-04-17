@@ -2755,9 +2755,9 @@ class TransactionConsenus {
       let receivedChallenger: Shardus.NodeWithRank
 
       // add the challenge to the queueEntry if it is from a unique node
-      if (queueEntry.uniqueChallenges[confirmOrChallenge.sign.owner] == null) {
-        queueEntry.uniqueChallenges[confirmOrChallenge.sign.owner] = confirmOrChallenge
-        queueEntry.uniqueChallengesCount++
+      if (!queueEntry.uniqueChallenges.has(confirmOrChallenge.sign.owner)) {
+        queueEntry.uniqueChallenges.add(confirmOrChallenge.sign.owner)
+        queueEntry.uniqueChallengesCount = queueEntry.uniqueChallenges.size
         if (this.stateManager.consensusLog)
           this.mainLogger.debug(
             `tryAppendMessage: ${queueEntry.logID} unique challenge added. ${JSON.stringify(
