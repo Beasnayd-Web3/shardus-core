@@ -1503,7 +1503,9 @@ class TransactionConsenus {
             queueEntry.receivedBestChallenger &&
             queueEntry.uniqueChallengesCount < this.config.stateManager.minRequiredChallenges
           ) {
-            console.log(`BLUE: ${queueEntry.logID} we have a challenge message but not enough challenges`)
+            console.log(
+              `BLUE: ${queueEntry.logID} we have a challenge message but not enough challenges. ${queueEntry.uniqueChallengesCount} vs ${this.config.stateManager.minRequiredChallenges}`
+            )
           }
 
           // create receipt
@@ -1574,7 +1576,7 @@ class TransactionConsenus {
 
               if (robustUniqueCount < this.config.stateManager.minRequiredChallenges) {
                 console.log(
-                  `BLUE: ${queueEntry.logID} ALERT RQ gave challenge message but not enough challenges`
+                  `BLUE: ${queueEntry.logID} ALERT RQ gave challenge message but not enough challenges. ${robustUniqueCount} vs ${this.config.stateManager.minRequiredChallenges}`
                 )
               }
               nestedCountersInstance.countEvent(
