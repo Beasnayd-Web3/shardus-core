@@ -836,6 +836,8 @@ class TransactionRepair {
         // )
         // console.log('REPAIR FINISHED', queueEntry.acceptedTx.txId, queueEntry)
         if (queueEntry.isInExecutionHome === true) {
+          console.log( 'REPAIR FINISHED', queueEntry.acceptedTx.txId, queueEntry.acceptedTx.timestamp, queueEntry.preApplyTXResult && queueEntry.preApplyTXResult.applyResponse  && queueEntry.ourVoteHash, queueEntry.appliedReceiptForRepair2 &&
+          queueEntry.appliedReceiptForRepair2.appliedVote && this.crypto.hash(queueEntry.appliedReceiptForRepair2.appliedVote))
           if (queueEntry.preApplyTXResult && queueEntry.preApplyTXResult.applyResponse) {
             // Temp solution to forward the receipt to the subscribed archivers although it has to be repaired
             // This still needs checking of the our votehash matches with the winning votehash or our appReceiptDataHash matches with the winning appReceiptDataHash
@@ -848,7 +850,6 @@ class TransactionRepair {
                 queueEntry.ourVoteHash === this.crypto.hash(queueEntry.appliedReceiptForRepair2.appliedVote)
               ) {
                 if (this.config.p2p.experimentalSnapshot)
-                  if (logFlags.verbose)
                     console.log('repair commit', queueEntry.acceptedTx.txId, queueEntry.acceptedTx.timestamp)
                   this.stateManager.transactionQueue.addReceiptToForward(queueEntry, 'repair')
               }

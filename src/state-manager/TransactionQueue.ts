@@ -5922,8 +5922,7 @@ class TransactionQueue {
                   this.profiler.profileSectionEnd('commit')
                   //}
                 }
-                if (logFlags.verbose)
-                  console.log('commit commit', queueEntry.acceptedTx.txId, queueEntry.acceptedTx.timestamp)
+                console.log('commit commit', queueEntry.acceptedTx.txId, queueEntry.acceptedTx.timestamp)
                 if (this.config.p2p.experimentalSnapshot) this.addReceiptToForward(queueEntry, 'commit')
 
                 if (hasReceiptFail) {
@@ -6187,7 +6186,6 @@ class TransactionQueue {
   }
 
   addOriginalTxDataToForward(queueEntry: QueueEntry): void {
-    if (logFlags.verbose)
       console.log('originalTxData', queueEntry.acceptedTx.txId, queueEntry.acceptedTx.timestamp)
     const { acceptedTx } = queueEntry
     const originalTxData = {
@@ -6201,7 +6199,6 @@ class TransactionQueue {
   }
 
   addReceiptToForward(queueEntry: QueueEntry, debugString = ''): void {
-    if (logFlags.verbose)
       console.log(
         'addReceiptToForward',
         queueEntry.acceptedTx.txId,
