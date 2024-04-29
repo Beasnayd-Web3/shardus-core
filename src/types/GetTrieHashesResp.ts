@@ -44,7 +44,7 @@ export function deserializeGetTrieHashesResp(stream: VectorBufferStream): GetTri
     throw new Error('Unsupported version in deserializeGetTrieHashesResp')
   }
 
-  const is_nodeId = stream.readString()
+  const is_nodeId = stream.readUInt8()
   let nodeId = undefined
 
   if(is_nodeId){
