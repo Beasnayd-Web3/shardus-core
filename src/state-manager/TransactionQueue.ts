@@ -94,6 +94,7 @@ import {
   serializeRequestReceiptForTxReq,
 } from '../types/RequestReceiptForTxReq'
 import { isNodeInRotationBounds } from '../p2p/Utils'
+import { ResponseError } from '../types/ResponseError'
 
 interface Receipt {
   tx: AcceptedTx
@@ -893,16 +894,23 @@ class TransactionQueue {
           full_receipt: 'b',
           sign: 'o',
         })
-        if (error) return res.send(utils.logSafeStringify((result = { success: false, reason: error })))
+        if (error) {
+          console.log('get-tx-receipt: Validation error: ', error);
+          return res.send(utils.logSafeStringify((result = { success: false, reason: error })));
+        }
         error = utils.validateTypes(req.body.sign, {
           owner: 's',
           sig: 's',
         })
-        if (error) return res.send(utils.logSafeStringify((result = { success: false, reason: error })))
+        if (error) {
+          console.log('get-tx-receipt: Signature validation error: ', error);
+          return res.send(utils.logSafeStringify((result = { success: false, reason: error })));
+        }
 
         const { txId, timestamp, full_receipt, sign } = req.body
         const isReqFromArchiver = Archivers.archivers.has(sign.owner)
         if (!isReqFromArchiver) {
+          if(logFlags.verbose) console.log('get-tx-receipt: Request validation error: Not from Archiver.');
           result = { success: false, reason: 'Request not from Archiver.' }
         } else {
           const isValidSignature = this.crypto.verify(req.body, sign.owner)
@@ -922,21 +930,35 @@ class TransactionQueue {
               if (logFlags.verbose) console.log('get-tx-receipt: ', txId, timestamp, 'commiting')
               queueEntry = this._transactionQueueByID.get(txId)
             }
-            if (!queueEntry) return res.status(400).json({ success: false, reason: 'Receipt Not Found.' })
+            if (!queueEntry){
+              if(logFlags.verbose) console.log('get-tx-receipt: Queue Entry is not available.')
+              return res.status(400).json({ success: false, reason: 'Receipt Not Found.' })
+            } 
             if (full_receipt) {
+              if(logFlags.verbose) console.log('get-tx-receipt: fullReceipt parent value: ', full_receipt)
               const fullReceipt: ArchiverReceipt = this.getArchiverReceiptFromQueueEntry(queueEntry)
-              if (fullReceipt === null) return res.status(400).json({ success: false, reason: 'Receipt Not Found.' })
+              if(logFlags.verbose) console.log('get-tx-receipt: fullReceipt child value: ', fullReceipt)
+              if (fullReceipt === null){
+                if(logFlags.verbose) console.log('get-tx-receipt: fullReceipt value is null')
+                return res.status(400).json({ success: false, reason: 'Receipt Not Found.' })
+              } 
               result = JSON.parse(utils.cryptoStringify({ success: true, receipt: fullReceipt }))
             } else {
               result = { success: true, receipt: this.stateManager.getReceipt2(queueEntry) }
             }
           } else {
+            if(logFlags.verbose) console.log('get-tx-receipt: Invalid Signature problem')
             result = { success: false, reason: 'Invalid Signature.' }
           }
         }
+        if(logFlags.verbose) console.log('get-tx-receipt: the result finally is', result)
         res.send(utils.safeStringify(result))
       } catch (e) {
-        console.log('Error caught in /get-tx-receipt: ', e)
+        if (e instanceof ResponseError) {
+          console.log('get-tx-receipt: the error is', e)
+          nestedCountersInstance.countEvent('get-tx-receipt', `externalRoute error ${e.Code}`)
+        }
+        console.trace(e)
         res.send(utils.safeStringify((result = { success: false, reason: e })))
       }
     })
