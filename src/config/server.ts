@@ -285,6 +285,7 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     waitLimitAfterFirstMessage: 2000,
     minRequiredChallenges: 3,
     useNewPOQ: false,
+    forwardToLuckyNodes: true,
     integrityCheckBeforeChallenge: true,
     checkPrecrackStatus: true,
     noVoteSeenExpirationTime: 10000,
