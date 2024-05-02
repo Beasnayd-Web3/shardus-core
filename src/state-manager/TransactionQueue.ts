@@ -895,7 +895,7 @@ class TransactionQueue {
           sign: 'o',
         })
         if (error) {
-          console.log('get-tx-receipt: Validation error: ', error)
+          if(logFlags.error) console.log('get-tx-receipt: Validation error: ', error)
           return res.send(utils.logSafeStringify((result = { success: false, reason: error })))
         }
         error = utils.validateTypes(req.body.sign, {
@@ -903,7 +903,7 @@ class TransactionQueue {
           sig: 's',
         })
         if (error) {
-          console.log('get-tx-receipt: Signature validation error: ', error)
+          if(logFlags.error) console.log('get-tx-receipt: Signature validation error: ', error)
           return res.send(utils.logSafeStringify((result = { success: false, reason: error })))
         }
 
