@@ -894,9 +894,12 @@ async function checkNodeId(nodeMatch: (node: any) => boolean, selfId: string): P
   // for nodes joining the network in some cases the correct cycle to check is the previous one that is not in the cycle chain of the node
   // query the archiver for the latest cycles if we can't find the node in the current cycle
   if (!node) {
+    console.log("ATHARVA: dit not match first check", node, selfId, newestCycle.joinedConsensors)
+    console.log(`ATHARVA: my info: ${network.ipInfo.externalIp}:${network.ipInfo.externalPort} ${selfId}`)
     //check the latest 4 cycles from the archiver
     if (logFlags.p2pNonFatal) info('Getting latest cycles from archiver check node id')
     const latestCycles = await getLatestCyclesFromArchiver(4)
+    console.log("ATHARVA: latestCycles", latestCycles)
     for (const cycle of latestCycles) {
       node = cycle.joinedConsensors.find(nodeMatch)
       if (node) {
@@ -907,6 +910,7 @@ async function checkNodeId(nodeMatch: (node: any) => boolean, selfId: string): P
 
   if (!node || node.id !== selfId) {
     /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `syncCycleChain: ${idErrorMessage}`)
+    console.log(`ATHARVA: ${node} ${node.id} ${selfId}`)
     throw new Error(idErrorMessage)
   }
 
