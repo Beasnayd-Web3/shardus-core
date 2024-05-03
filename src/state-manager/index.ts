@@ -305,7 +305,7 @@ class StateManager {
     this.lastActiveNodeCount = 0
 
     this.extendedRepairLogging = true
-    this.consensusLog = true
+    this.consensusLog = false
 
     this.shardValuesByCycle = new Map()
     this.currentCycleShardData = null as CycleShardData | null
@@ -2234,6 +2234,24 @@ class StateManager {
     Context.network.registerExternalGet('debug-consensus-log', isDebugModeMiddleware, (req, res) => {
       this.consensusLog = !this.consensusLog
       res.write(`consensusLog: ${this.consensusLog}`)
+      res.end()
+    })
+
+    Context.network.registerExternalGet('debug-noncequeue-count', isDebugModeMiddleware, (req, res) => {
+      let result = this.transactionQueue.getPendingCountInNonceQueue()
+      res.json(result)
+      res.end()
+    })
+
+    Context.network.registerExternalGet('debug-queue-items', isDebugModeMiddleware, (req, res) => {
+      let result = this.transactionQueue.getQueueItems()
+      res.write(utils.stringify(result))
+      res.end()
+    })
+
+    Context.network.registerExternalGet('debug-queue-clear', isDebugModeMiddleware, (req, res) => {
+      let result = this.transactionQueue.clearQueueItems()
+      res.write(utils.stringify(result))
       res.end()
     })
 

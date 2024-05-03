@@ -1185,10 +1185,22 @@ export interface ServerConfiguration {
     waitUpstreamTx: boolean
     // whether the node should gossip complete data
     gossipCompleteData: boolean
+    // whether the node should share the complete data to neighbors
+    shareCompleteData: boolean
     // how many node to re-inject the tx received from client
     numberOfReInjectNodes: number
     // max number of pending nonce tx for an account
     maxPendingNonceTxs: number
+    // should attach final data to receipt
+    attachDataToReceipt: boolean
+    // number of execution nodes to gossip appliedReceipt
+    nodesToGossipAppliedReceipt: number
+    // set "true" will prevent tx from expiring
+    disableTxExpiration: boolean
+    // whether to remove the tx from the queue if it stuck for X min
+    removeStuckTxsFromQueue: boolean
+    // time to wait before removing the tx from the queue
+    stuckTxRemoveTime: number
   }
   /** Options for sharding calculations */
   sharding?: {

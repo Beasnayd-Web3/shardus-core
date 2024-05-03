@@ -18,6 +18,7 @@ export type TxDebug = {
 
 export type QueueEntry = {
   gossipedCompleteData: boolean;
+  sharedCompleteData: boolean;
   eligibleNodeIdsToVote: Set<string>
   eligibleNodeIdsToConfirm: Set<string>
   acceptedTx: Shardus.AcceptedTx
@@ -99,6 +100,7 @@ export type QueueEntry = {
   receivedBestChallenger?: Shardus.NodeWithRank
   newVotes: boolean
   voteCastAge: number
+  dataSharedTimestamp: number
   firstVoteReceivedTimestamp: number
   firstConfirmOrChallengeTimestamp: number
   lastVoteReceivedTimestamp: number
@@ -112,7 +114,8 @@ export type QueueEntry = {
   queryingRobustVote?: boolean
   queryingRobustConfirmOrChallenge?: boolean
   queryingRobustAccountData?: boolean
-  queryingFinalData?: boolean
+  queryingFinalData: boolean
+  lastFinalDataRequestTimestamp: number
   topConfirmations: Set<string>
   topVoters: Set<string>
   almostExpired?: boolean
