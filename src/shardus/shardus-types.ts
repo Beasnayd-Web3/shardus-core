@@ -683,6 +683,8 @@ export interface ServerConfiguration {
      **/
     gossipRecipients?: number
     gossipFactor?: number
+    /** When dynamicGossipFactor is true use calculateGossipFactor instead of gossipFactor */
+    dynamicGossipFactor: boolean
     gossipStartSeed?: number
     gossipSeedFallof?: number
     /** The gossipTimeout parameter is an Integer specifying the amount of time (in seconds) before an old gossip is deleted from a node. */

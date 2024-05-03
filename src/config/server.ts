@@ -47,6 +47,7 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     queryDelay: 1,
     gossipRecipients: 8,
     gossipFactor: 4,
+    dynamicGossipFactor: true,
     gossipStartSeed: 15,
     gossipSeedFallof: 15,
     gossipTimeout: 180,
