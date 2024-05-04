@@ -1171,6 +1171,8 @@ export interface ServerConfiguration {
     minRequiredChallenges: number
     // turn on the improved Proof of Quorum for large shards sizes
     useNewPOQ: boolean
+    // should the network forward TXs to lucky nodes?  (does not impact nonce queue, that will still forward)
+    forwardToLuckyNodes: boolean
     // whether the node should verify its data against the network before challenging
     integrityCheckBeforeChallenge: boolean
     // Should the protocol consier a precrack failure as a failed transaction
