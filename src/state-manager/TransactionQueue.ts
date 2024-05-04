@@ -4127,21 +4127,29 @@ class TransactionQueue {
     if (senderNode === null) return false
 
     const senderHasAddress = ShardFunctions.testAddressInRange(dataKey, senderNode.storedPartitions)
-    const senderIsInExecutionGroup = queueEntry.executionGroupMap.has(senderNodeId)
 
-    // check if sender is an execution neighouring node
-    const neighbourNodes = utils.selectNeighbors(queueEntry.executionGroup, queueEntry.ourExGroupIndex, 2) as Shardus.Node[]
-    const neighbourNodeIds = neighbourNodes.map((node) => node.id)
-    if (senderIsInExecutionGroup && neighbourNodeIds.includes(senderNodeId) === false) {
-      this.mainLogger.error(`validateCorrespondingTellSender: sender is an execution node but not a neighbour node`)
-      return false
-    }
-    if (senderIsInExecutionGroup) nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is an execution node')
-    else nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is not an execution node')
+    if (configContext.stateManager.shareCompleteData){
+      const senderIsInExecutionGroup = queueEntry.executionGroupMap.has(senderNodeId)
 
-    /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`validateCorrespondingTellSender: data key: ${dataKey} sender node id: ${senderNodeId} senderHasAddress: ${senderHasAddress} receiverIsInExecutionGroup: ${receiverIsInExecutionGroup} senderIsInExecutionGroup: ${senderIsInExecutionGroup}`)
-    if (receiverIsInExecutionGroup === true || senderHasAddress === true || senderIsInExecutionGroup === true) {
-      return true
+      // check if sender is an execution neighouring node
+      const neighbourNodes = utils.selectNeighbors(queueEntry.executionGroup, queueEntry.ourExGroupIndex, 2) as Shardus.Node[]
+      const neighbourNodeIds = neighbourNodes.map((node) => node.id)
+      if (senderIsInExecutionGroup && neighbourNodeIds.includes(senderNodeId) === false) {
+        this.mainLogger.error(`validateCorrespondingTellSender: sender is an execution node but not a neighbour node`)
+        return false
+      }
+      if (senderIsInExecutionGroup) nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is an execution node')
+      else nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is not an execution node')
+
+      /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`validateCorrespondingTellSender: data key: ${dataKey} sender node id: ${senderNodeId} senderHasAddress: ${senderHasAddress} receiverIsInExecutionGroup: ${receiverIsInExecutionGroup} senderIsInExecutionGroup: ${senderIsInExecutionGroup}`)
+      if (receiverIsInExecutionGroup === true || senderHasAddress === true || senderIsInExecutionGroup === true) {
+        return true
+      }
+    } else {
+      /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`validateCorrespondingTellSender: data key: ${dataKey} sender node id: ${senderNodeId} senderHasAddress: ${senderHasAddress} receiverIsInExecutionGroup: ${receiverIsInExecutionGroup}`)
+      if (receiverIsInExecutionGroup === true || senderHasAddress === true) {
+        return true
+      }
     }
 
     return false
