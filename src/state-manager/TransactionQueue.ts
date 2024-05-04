@@ -2909,7 +2909,13 @@ class TransactionQueue {
 
       //give up and wait for receipt
       queueEntry.waitForReceiptOnly = true
-      this.updateTxState(queueEntry, 'await final data')
+
+      if(this.config.stateManager.txStateMachineChanges){
+        this.updateTxState(queueEntry, 'await final data')
+      } else {
+        this.updateTxState(queueEntry, 'consensing')
+      } 
+
       if (logFlags.debug)
         this.mainLogger.debug(`queueEntryRequestMissingData failed to get all data for: ${queueEntry.logID}`)
     }
@@ -4666,7 +4672,11 @@ class TransactionQueue {
             /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('shrd_processAcceptedTxQueueTooOld2', `${utils.makeShortHash(txQueueEntry.acceptedTx.txId)}`, 'processAcceptedTxQueue working on older tx ' + timestamp + ' age: ' + age)
             nestedCountersInstance.countEvent('processing', 'txExpired1 > M. waitForReceiptOnly')
             txQueueEntry.waitForReceiptOnly = true
-            this.updateTxState(txQueueEntry, 'await final data')
+            if(this.config.stateManager.txStateMachineChanges){
+              this.updateTxState(txQueueEntry, 'await final data')
+            } else {
+              this.updateTxState(txQueueEntry, 'consensing')
+            } 
           }
 
           // do not injest tranactions that are long expired. there could be 10k+ of them if we are restarting the processing queue
@@ -4924,7 +4934,12 @@ class TransactionQueue {
                       /* prettier-ignore */ nestedCountersInstance.countEvent('txMissingReceipt', `Wait for reciept only: txAge > timeM2.5. state:${queueEntry.state} globalMod:${queueEntry.globalModification}`)
                       queueEntry.waitForReceiptOnly = true
                       queueEntry.m2TimeoutReached = true
-                      this.updateTxState(queueEntry, 'await final data')
+
+                      if(this.config.stateManager.txStateMachineChanges){
+                        this.updateTxState(queueEntry, 'await final data')
+                      } else {
+                        this.updateTxState(queueEntry, 'consensing')
+                      } 
                       continue
                     }
                   }
@@ -4957,7 +4972,12 @@ class TransactionQueue {
                     /* prettier-ignore */ nestedCountersInstance.countEvent('txMissingReceipt', `txAge > timeM3 => ask for receipt now. state:${queueEntry.state} globalMod:${queueEntry.globalModification} seen:${seen}`)
                     queueEntry.waitForReceiptOnly = true
                     queueEntry.m2TimeoutReached = true
-                    this.updateTxState(queueEntry, 'await final data')
+                    
+                    if(this.config.stateManager.txStateMachineChanges){
+                      this.updateTxState(queueEntry, 'await final data')
+                    } else {
+                      this.updateTxState(queueEntry, 'consensing')
+                    } 
                     continue
                   }
                 }
@@ -5193,7 +5213,13 @@ class TransactionQueue {
               nestedCountersInstance.countEvent('sync', 'syncing state needs bump')
 
               queueEntry.waitForReceiptOnly = true
-              // this.updateTxState(queueEntry, 'await final data')
+
+              // old logic changed state here (seen commented out in the new mode)
+              if(this.config.stateManager.txStateMachineChanges){
+                // this.updateTxState(queueEntry, 'await final data')
+              } else {
+                this.updateTxState(queueEntry, 'await final data')
+              } 
             }
 
             this.processQueue_markAccountsSeen(seenAccounts, queueEntry)
@@ -5314,7 +5340,12 @@ class TransactionQueue {
                 /* prettier-ignore */ nestedCountersInstance.countEvent('processing', `awaiting data txAge > m2.5 set to consensing hasAll:${queueEntry.hasAll} hasReceivedApplyReceipt:${hasReceivedApplyReceipt}`)
 
                 queueEntry.waitForReceiptOnly = true
-                this.updateTxState(queueEntry, 'await final data')
+
+                if(this.config.stateManager.txStateMachineChanges){
+                  this.updateTxState(queueEntry, 'await final data')
+                } else {
+                  this.updateTxState(queueEntry, 'consensing')
+                } 
                 continue
               }
             }
@@ -5499,7 +5530,12 @@ class TransactionQueue {
                     /* prettier-ignore */ nestedCountersInstance.countEvent('processing', `txResult apply error. applied: ${txResult?.applied}`)
                     /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`processAcceptedTxQueue2 txResult problem txid:${queueEntry.logID} res: ${utils.stringifyReduce(txResult)} `)
                     queueEntry.waitForReceiptOnly = true
-                    this.updateTxState(queueEntry, 'await final data')
+
+                    if(this.config.stateManager.txStateMachineChanges){
+                      this.updateTxState(queueEntry, 'await final data')
+                    } else {
+                      this.updateTxState(queueEntry, 'consensing')
+                    } 
                     //TODO: need to flag this case so that it does not artificially increase the network load
                   }
                 } catch (ex) {
@@ -5840,11 +5876,12 @@ class TransactionQueue {
               if (configContext.stateManager.attachDataToReceipt && queueEntry.accountDataSet === true) {
                 if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_removeFromQueue : ${queueEntry.logID} because accountDataSet is true`)
                 this.removeFromQueue(queueEntry, currentIndex)
+                //this will possibly skip critical stats or exit steps that invoke a transaction applied event to the dapp
                 continue
               }
 
               //collectedFinalData
-              // todo: get the vote from queueEntry.receivedBestVote or receivedBestConfirmation instead of receipt2
+              //PURPL-74 todo: get the vote from queueEntry.receivedBestVote or receivedBestConfirmation instead of receipt2
               const receipt2 = this.stateManager.getReceipt2(queueEntry)
               let vote
               if (receipt2) {
@@ -5896,6 +5933,7 @@ class TransactionQueue {
                 // console.log(`thant: ${queueEntry.logID} incomplete: ${incomplete}, missingAccounts: ${missingAccounts}`)
 
                 if (incomplete && missingAccounts.length > 0) {
+                  
                   // start request process for missing data if we waited long enough
                   const timeSinceAwaitFinalStart = queueEntry.txDebug.startTimestamp['await final data'] > 0 ? shardusGetTime() - queueEntry.txDebug.startTimestamp['await final data'] : 0
                   let shouldStartFinalDataRequest = false
@@ -5911,7 +5949,8 @@ class TransactionQueue {
                   // start request process for missing data
                   const timeSinceLastFinalDataRequest = shardusGetTime() - queueEntry.lastFinalDataRequestTimestamp
                   // console.log(`thant: ${queueEntry.logID} timeSinceLastFinalDataRequest: ${timeSinceLastFinalDataRequest}, shouldStartFinalDataRequest: ${shouldStartFinalDataRequest}`)
-                  if (shouldStartFinalDataRequest && timeSinceLastFinalDataRequest > 5000) {
+                  if (this.config.stateManager.canRequestFinalData && shouldStartFinalDataRequest && timeSinceLastFinalDataRequest > 5000) {
+                    nestedCountersInstance.countEvent('stateManager', 'requestFinalData')
                     this.requestFinalData(queueEntry, missingAccounts)
                     queueEntry.lastFinalDataRequestTimestamp = shardusGetTime()
                     continue

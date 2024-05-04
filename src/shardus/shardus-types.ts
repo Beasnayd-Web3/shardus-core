@@ -1189,6 +1189,10 @@ export interface ServerConfiguration {
     gossipCompleteData: boolean
     // whether the node should share the complete data to neighbors
     shareCompleteData: boolean
+    // state machine chages updateTxState in several places from 'consensing' to 'await final data'
+    txStateMachineChanges: boolean
+    // will a node attempt to request final data 
+    canRequestFinalData:boolean
     // how many node to re-inject the tx received from client
     numberOfReInjectNodes: number
     // max number of pending nonce tx for an account

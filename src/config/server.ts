@@ -295,6 +295,8 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     waitUpstreamTx: false,
     gossipCompleteData: false,
     shareCompleteData: true,
+    txStateMachineChanges: true,
+    canRequestFinalData: true,
     numberOfReInjectNodes: 5,
     maxPendingNonceTxs: 10,
     attachDataToReceipt: true,
