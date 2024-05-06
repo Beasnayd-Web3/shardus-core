@@ -554,7 +554,7 @@ function validateCycles(cycles: P2P.CycleCreatorTypes.CycleRecord[]) {
   for (const cycleRecord of cycles) {
     let err = validateTypes(cycleRecord, {
       safetyMode: 'b?',
-      safetyNum: 'n',
+      safetyNum: 'n?',
       networkStateHash: 's',
       refreshedArchivers: 'a',
       refreshedConsensors: 'a',
