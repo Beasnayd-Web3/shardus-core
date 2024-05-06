@@ -13,7 +13,7 @@ export type AppliedVoteSerializable = {
   cant_apply: boolean // indicates that the preapply could not give a pass or fail
   node_id: string // record the node that is making this vote.. todo could look this up from the sig later
   sign?: SignSerializable
-  app_data_hash?: string
+  app_data_hash: string
 }
 
 export function serializeAppliedVote(
@@ -96,7 +96,7 @@ export function deserializeAppliedVote(stream: VectorBufferStream): AppliedVoteS
   }
 
   const isAppDataHashPresent = stream.readUInt8() === 1
-  let app_data_hash = null
+  let app_data_hash = ''
   if (isAppDataHashPresent) {
     app_data_hash = stream.readString()
   }
