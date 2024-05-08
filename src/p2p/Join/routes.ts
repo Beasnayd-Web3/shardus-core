@@ -381,8 +381,55 @@ const gossipJoinRoute: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.JoinRequest, P2P
   if (!config.p2p.useJoinProtocolV2) {
     profilerInstance.scopedProfileSectionStart('gossip-join')
     try {
-      // Do not forward gossip after quarter 2
-      if (CycleCreator.currentQuarter >= 3) return
+      // Ignore gossip outside of Q1 and Q2
+      if (![1, 2].includes(CycleCreator.currentQuarter)) {
+        /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `gossip-join-reject: not in Q1 or Q2`)
+        /* prettier-ignore */ if (logFlags.error) warn('gossip-join-reject: not in Q1 or Q2')
+        return
+      }
+      if (!payload) {
+        /* prettier-ignore */ if (logFlags.error) warn('gossip-join-reject: missing payload')
+        return
+      }
+
+      // Validate payload structure and types
+      let err = utils.validateTypes(payload, {
+        nodeInfo: 'o',
+        selectionNum: 's',
+        cycleMarker: 's',
+        proofOfWork: 's',
+        version: 's',
+        sign: 'o',
+        appJoinData: 'o',
+      })
+
+      if (err) {
+        /* prettier-ignore */ if (logFlags.error) warn(`gossip-join-reject: bad input ${err}`)
+        return
+      }
+
+      // validate the 'sign' object structure
+      err = utils.validateTypes(payload.sign, {
+        owner: 's',
+        sig: 's',
+      })
+
+      if (err) {
+        /* prettier-ignore */ if (logFlags.error) warn(`gossip-join-reject: bad input sign ${err}`)
+        return
+      }
+      const signer = NodeList.byPubKey.get(payload.sign.owner)
+      if (!signer) {
+        /* prettier-ignore */ if (logFlags.error) warn('gossip-join: Got join request from unknown node')
+      }
+
+      const isOrig = signer.id === sender
+
+      // Only accept original txs in quarter 1
+      if (isOrig && CycleCreator.currentQuarter > 1) {
+        /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `gossip-join-reject: CycleCreator.currentQuarter > 1 ${CycleCreator.currentQuarter}`)
+        return
+      }
 
       //  Validate of payload is done in addJoinRequest
       if (addJoinRequest(payload).success)
@@ -400,21 +447,44 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   P2P.JoinTypes.JoinRequest,
   P2P.NodeListTypes.Node['id']
 > = (payload: P2P.JoinTypes.JoinRequest, sender: P2P.NodeListTypes.Node['id'], tracker: string) => {
-
-  if (config.debug.cycleRecordOOSDebugLogs) {
-    //if (receivedJoin.has(payload.nodeInfo.publicKey) === false) {
-      //receivedJoin.set(payload.nodeInfo.publicKey, true)
-      const sendingNode = NodeList.activeByIdOrder.find((node) => node.id === sender)
-      console.log('DEBUG CR-OOS: gossipValidJoinRequests: ', ' sender ', sendingNode.externalPort, ' payload.pubKey: ', payload.nodeInfo.publicKey, 'cC: ', CycleCreator.currentCycle, ' cQ: ', CycleCreator.currentQuarter)
-    //}
-  }
-
-  // do not forward gossip after quarter 2
-  if (CycleCreator.currentQuarter > 2) {
-    if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: gossipValidJoinRequests: Q is > 2: cC: ', CycleCreator.currentCycle, ' cQ: ', CycleCreator.currentQuarter, ' payload id: ', payload.nodeInfo.publicKey)
-    /* prettier-ignore */ nestedCountersInstance.countEvent( 'p2p', `join-gossip-reject: late-request > Q2:  ${CycleCreator.currentQuarter}` )
+  // Ignore gossip outside of Q1 and Q2
+  if (![1, 2].includes(CycleCreator.currentQuarter)) {
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `join-gossip-reject: not in Q1 or Q2`)
+    /* prettier-ignore */ if (logFlags.error) warn('join-gossip-reject: not in Q1 or Q2')
     return
   }
+  if (!payload) {
+    /* prettier-ignore */ if (logFlags.error) warn('join-gossip-reject: missing payload')
+    return
+  }
+
+  // Validate payload structure and types
+  let err = utils.validateTypes(payload, {
+    nodeInfo: 'o',
+    selectionNum: 's',
+    cycleMarker: 's',
+    proofOfWork: 's',
+    version: 's',
+    sign: 'o',
+    appJoinData: 'o', //definition is any type
+  })
+
+  if (err) {
+    /* prettier-ignore */ if (logFlags.error) warn(`join-gossip-reject: bad input ${err}`)
+    return
+  }
+
+  // validate the 'sign' object structure
+  err = utils.validateTypes(payload.sign, {
+    owner: 's',
+    sig: 's',
+  })
+
+  if (err) {
+    /* prettier-ignore */ if (logFlags.error) warn(`join-gossip-reject: bad input sign ${err}`)
+    return
+  }
+
 
   // ensure this join request doesn't already exist in standby nodes
   if (getStandbyNodesInfoMap().has(payload.nodeInfo.publicKey)) {
@@ -454,12 +524,58 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   /* prettier-ignore */ nestedCountersInstance.countEvent( 'p2p', `join-gossip: request saved and gossiped` )
   Comms.sendGossip('gossip-valid-join-requests', payload, tracker, sender, NodeList.byIdOrder, false)
 }
-
 const gossipUnjoinRequests: P2P.P2PTypes.GossipHandler<UnjoinRequest, P2P.NodeListTypes.Node['id']> = (
   payload: UnjoinRequest,
   sender: P2P.NodeListTypes.Node['id'],
   tracker: string
 ) => {
+  // Ignore gossip outside of Q1 and Q2
+  if (![1, 2].includes(CycleCreator.currentQuarter)) {
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `gossip-unjoin-reject: not in Q1 or Q2`)
+    /* prettier-ignore */ if (logFlags.error) warn('gossip-unjoin-reject: not in Q1 or Q2')
+    return
+  }
+  if (!payload) {
+    warn('No payload provided for the `UnjoinRequest` request.')
+    return
+  }
+
+
+  // Validate payload structure and types
+  let err = utils.validateTypes(payload, {
+    publicKey: 's',
+    sign: 'o',
+  })
+
+  if (err) {
+    /* prettier-ignore */ if (logFlags.error) warn(`gossipUnjoinRequests: bad input ${err}`)
+    return
+  }
+
+  // validate the 'sign' object structure
+  err = utils.validateTypes(payload.sign, {
+    owner: 's',
+    sig: 's',
+  })
+
+  if (err) {
+    /* prettier-ignore */ if (logFlags.error) warn(`gossipUnjoinRequests: bad input sign ${err}`)
+    return
+  }
+
+  const signer = NodeList.byPubKey.get(payload.sign.owner)
+  if (!signer) {
+    /* prettier-ignore */ if (logFlags.error) warn('gossip-unjoin: Got unjoin-request from unknown node')
+  }
+
+  const isOrig = signer.id === sender
+
+  // Only accept original txs in quarter 1
+  if (isOrig && CycleCreator.currentQuarter > 1) {
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `gossip-unjoin-reject: CycleCreator.currentQuarter > 1 ${CycleCreator.currentQuarter}`)
+    return
+  }
+
   const processResult = processNewUnjoinRequest(payload)
   if (processResult.isErr()) {
     warn(`gossip-unjoin failed to process unjoin request: ${processResult.error}`)
@@ -489,26 +605,60 @@ const gossipSyncStartedRoute: P2P.P2PTypes.GossipHandler<StartedSyncingRequest, 
   nestedCountersInstance.countEvent('p2p', `received gossip-sync-started`)
   /* prettier-ignore */ if (logFlags.verbose) console.log(`received gossip-sync-started`)
   try {
+    // Ignore gossip outside of Q1 and Q2
+    if (![1, 2].includes(CycleCreator.currentQuarter)) {
+      /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-started-reject: not in Q1 or Q2`)
+      /* prettier-ignore */ if (logFlags.error) warn('gossip-unjoin-reject: not in Q1 or Q2')
+      return
+    }
+
     if(!payload) {
       warn('No payload provided for the `SyncStarted` request.')
       return
     }
-    // Do not forward gossip after quarter 2
-    if (CycleCreator.currentQuarter >= 3) {
-      if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: STARTED_SYNCING: gossipSyncFinished rejected: cC: ', CycleCreator.currentCycle, ' cQ: ', CycleCreator.currentQuarter, ' payload id: ', payload.nodeId, ' payload cycle: ', payload.cycleNumber)
+
+    // Validate payload structure and types
+    let err = utils.validateTypes(payload, {
+      nodeId: 's',
+      cycleNumber: 'n',
+      sign: 'o',
+    })
+
+    if (err) {
+      /* prettier-ignore */ if (logFlags.error) warn(`gossipSyncStartedRoute: bad input ${err}`)
+      return
+    }
+
+    // validate the 'sign' object structure
+    err = utils.validateTypes(payload.sign, {
+      owner: 's',
+      sig: 's',
+    })
+
+    if (err) {
+      /* prettier-ignore */ if (logFlags.error) warn(`gossipSyncStartedRoute: bad input sign ${err}`)
+      return
+    }
+
+    const signer = NodeList.byPubKey.get(payload.sign.owner)
+    if (!signer) {
+      /* prettier-ignore */ if (logFlags.error) warn('sync-started: Got sync-started from unknown node')
+    }
+
+    const isOrig = signer.id === sender
+
+    // Only accept original txs in quarter 1
+    if (isOrig && CycleCreator.currentQuarter > 1) {
+      /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-started-reject: CycleCreator.currentQuarter > 1 ${CycleCreator.currentQuarter}`)
       return
     }
 
     //  Validate of payload is done in addSyncStarted
     const addSyncStartedResult = addSyncStarted(payload)
-    nestedCountersInstance.countEvent('p2p', `sync-started validation success: ${addSyncStartedResult.success}`)
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-started validation success: ${addSyncStartedResult.success}`)
     /* prettier-ignore */ if (logFlags.verbose) console.log(`sync-started validation success: ${addSyncStartedResult.success}`)
-    if (!addSyncStartedResult.success) {
-      if (addSyncStartedResult.reason !== 'node has already submitted syncStarted request') {
-        if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: STARTED_SYNCING: gossipSyncFinished rejected: ', addSyncStartedResult.reason, ' payload id: ', payload.nodeId, ' payload cycle: ', payload.cycleNumber)
-      }
-      nestedCountersInstance.countEvent('p2p', `sync-started failure reason: ${addSyncStartedResult.reason}`)
-    }
+    /* prettier-ignore */ if (!addSyncStartedResult.success)
+nestedCountersInstance.countEvent('p2p', `sync-started failure reason: ${addSyncStartedResult.reason}`)
     /* prettier-ignore */ if (logFlags.verbose && !addSyncStartedResult.success) console.log(`sync-started validation reason: ${addSyncStartedResult.reason}`)
     if (addSyncStartedResult.success)
       Comms.sendGossip('gossip-sync-started', payload, tracker, sender, NodeList.byIdOrder, false)
@@ -538,11 +688,52 @@ const gossipSyncFinishedRoute: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.Finished
   }
 
   try {
-    // Do not forward gossip after quarter 2
-    if (CycleCreator.currentQuarter >= 3) {
-      if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: FINISHED_SYNCING: gossipSyncFinished rejected: cC: ', CycleCreator.currentCycle, ' cQ: ', CycleCreator.currentQuarter, ' payload id: ', payload.nodeId, ' payload cycle: ', payload.cycleNumber)
+    // Ignore gossip outside of Q1 and Q2
+    if (![1, 2].includes(CycleCreator.currentQuarter)) {
+      if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: gossipSyncFinished rejected: cC: ', CycleCreator.currentCycle, ' cQ: ', CycleCreator.currentQuarter, ' payload id: ', payload.nodeId, ' payload cycle: ', payload.cycleNumber)
       nestedCountersInstance.countEvent('p2p', `gossipSyncFinished rejected: cC: ${CycleCreator.currentCycle} cQ: ${CycleCreator.currentQuarter} payload id: ${payload.nodeId} payload cycle: ${payload.cycleNumber}`)
       /* prettier-ignore */ if (logFlags.p2pNonFatal && logFlags.console) console.log('gossipSyncFinished rejected: due to currentQuarter >= 3', payload.nodeId, CycleCreator.currentQuarter)
+      return
+    }
+    if (!payload) {
+      /* prettier-ignore */ if (logFlags.error) warn('No payload provided for the `SyncFinished` request.')
+      return
+    }
+
+    // Validate payload structure and types
+    let err = utils.validateTypes(payload, {
+      nodeId: 's',
+      cycleNumber: 'n',
+      sign: 'o',
+    })
+
+    if (err) {
+      /* prettier-ignore */ if (logFlags.error) warn(`gossipSyncFinishedRoute: bad input ${err}`)
+      return
+    }
+
+    // validate the 'sign' object structure
+    err = utils.validateTypes(payload.sign, {
+      owner: 's',
+      sig: 's',
+    })
+
+    if (err) {
+      /* prettier-ignore */ if (logFlags.error) warn(`gossipSyncFinishedRoute: bad input sign ${err}`)
+      return
+    }
+
+
+    const signer = NodeList.byPubKey.get(payload.sign.owner)
+    if (!signer) {
+      /* prettier-ignore */ if (logFlags.error) warn('sync-finished: Got sync-finished from unknown node')
+    }
+
+    const isOrig = signer.id === sender
+
+    // Only accept original txs in quarter 1
+    if (isOrig && CycleCreator.currentQuarter > 1) {
+      /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-finished-reject: CycleCreator.currentQuarter > 1 ${CycleCreator.currentQuarter}`)
       return
     }
 
@@ -550,10 +741,10 @@ const gossipSyncFinishedRoute: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.Finished
 
     // Validate payload in addFinishedSyncing
     const addFinishedSyncingResult = addFinishedSyncing(payload)
-    nestedCountersInstance.countEvent('p2p', `sync-finished validation success: ${addFinishedSyncingResult.success}`)
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-finished validation success: ${addFinishedSyncingResult.success}`)
     if (!addFinishedSyncingResult.success) {
       if (addFinishedSyncingResult.reason !== 'node has already submitted syncFinished request') {
-        if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: FINISHED_SYNCING: gossipSyncFinished rejected: ', addFinishedSyncingResult.reason, ' payload id: ', payload.nodeId, ' payload cycle: ', payload.cycleNumber)
+        if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: gossipSyncFinished rejected: ', addFinishedSyncingResult.reason, ' payload id: ', payload.nodeId, ' payload cycle: ', payload.cycleNumber)
       }
       nestedCountersInstance.countEvent('p2p', `sync-finished failure reason: ${addFinishedSyncingResult.reason}`)
     }
@@ -576,17 +767,60 @@ const gossipStandbyRefresh: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.StandbyRefr
   nestedCountersInstance.countEvent('p2p', `received gossip-standby-refresh`)
   /* prettier-ignore */ if (logFlags.verbose) console.log(`received gossip-standby-refresh`)
   try {
-    //if (logFlags.p2pNonFatal) info(`Got scale request: ${JSON.stringify(payload)}`)
-    if (!payload) {
-      warn('No payload provided for the `StandbyRefreshRequest` request.')
+    // Ignore gossip outside of Q1 and Q2
+    if (![1, 2].includes(CycleCreator.currentQuarter)) {
+      /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `standby-refresh-reject: not in Q1 or Q2`)
+      /* prettier-ignore */ if (logFlags.error) warn('standby-refresh-reject: not in Q1 or Q2')
       return
     }
-    if (CycleCreator.currentQuarter >= 3) return
+    //if (logFlags.p2pNonFatal) info(`Got scale request: ${JSON.stringify(payload)}`)
+    if (!payload) {
+      warn('No payload provided for the `KeepInStandby` request.')
+      return
+    }
+
+    // Validate payload structure and types
+    let err = utils.validateTypes(payload, {
+      publicKey: 's',
+      cycleNumber: 'n',
+      sign: 'o',
+    })
+
+    if (err) {
+      /* prettier-ignore */ if (logFlags.error) warn(`gossipStandbyRefresh: bad input ${err}`)
+      return
+    }
+
+    // validate the 'sign' object structure
+    err = utils.validateTypes(payload.sign, {
+      owner: 's',
+      sig: 's',
+    })
+
+    if (err) {
+      /* prettier-ignore */ if (logFlags.error) warn(`gossipStandbyRefresh: bad input sign ${err}`)
+      return
+    }
+    
+
+    // Verify Sender as Original Signer
+    const signer = NodeList.byPubKey.get(payload.sign.owner)
+    if (!signer) {
+      /* prettier-ignore */ if (logFlags.error) warn('standby-refresh-reject: Got standby-refresh from unknown node')
+    }
+
+    const isOrig = signer.id === sender
+
+    // Only accept original txs in quarter 1
+    if (isOrig && CycleCreator.currentQuarter > 1) {
+      /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `standby-refresh-reject: CycleCreator.currentQuarter > 1 ${CycleCreator.currentQuarter}`)
+      return
+    }
 
     const added = addStandbyRefresh(payload)
-    nestedCountersInstance.countEvent('p2p', `standby-refresh validation success: ${added.success}`)
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `standby-refresh validation success: ${added.success}`)
     /* prettier-ignore */ if (logFlags.verbose) console.log(`standby-refresh validation success: ${added.success}`)
-    if (!added.success) nestedCountersInstance.countEvent('p2p', `standby-refresh failure reason: ${added.reason}`)
+    /* prettier-ignore */ if (!added.success) nestedCountersInstance.countEvent('p2p', `standby-refresh failure reason: ${added.reason}`)
     /* prettier-ignore */ if (logFlags.verbose && !added.success) console.log(`standby-refresh validation reason: ${added.reason}`)
     if (added.success)
       Comms.sendGossip('gossip-standby-refresh', payload, tracker, sender, NodeList.byIdOrder, false)

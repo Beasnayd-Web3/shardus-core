@@ -28,6 +28,8 @@ import { deserializeLostArchiverInvestigateReq } from '../../types/LostArchiverI
 import { getStreamWithTypeCheck } from '../../types/Helpers'
 import { TypeIdentifierEnum } from '../../types/enum/TypeIdentifierEnum'
 import { safeStringify } from '../../utils'
+import { validateTypes } from '../../utils'
+import * as NodeList from '../NodeList'
 
 /** Gossip */
 
@@ -63,6 +65,41 @@ const lostArchiverUpGossip: GossipHandler<SignedObject<ArchiverUpMsg>, Node['id'
     logging.warn(`lostArchiverUpGossip: invalid payload error: ${error}, payload: ${inspect(payload)}`)
     return
   }
+
+  // Validate Types for the entire payload, now using the specific types from LostArchiverTypes.d.ts
+  let err = validateTypes(payload, {
+    type: 's',
+    downMsg: 'o',
+    refuteMsg: 'o',
+    cycle: 's',
+    sign: 'o',
+  })
+  if (err) {
+    logging.warn(`lostArchiverUpGossip: bad input ${err}`)
+    return
+  }
+
+  // Validate Payload.sign Structure
+  err = validateTypes(payload.sign, { owner: 's', sig: 's' })
+  if (err) {
+    logging.warn(`lostArchiverUpGossip: bad input sign ${err}`)
+    return
+  }
+
+ // Check Signer Known and determine if the sender is the original sender
+  const signerPublicKey = payload.sign.owner
+  const signer = NodeList.byPubKey.get(signerPublicKey)
+  if (!signer) {
+    logging.warn(`lostArchiverUpGossip: Signer with public key ${signerPublicKey} is not known`)
+  }
+  const isOrig = signer.id === sender 
+
+  // Only accept original messages in quarter 1
+  if (isOrig && currentQuarter > 1) {
+    logging.warn(`lostArchiverUpGossip: Original message received outside of Q1, currentQuarter: ${currentQuarter}`)
+    return
+  }
+
 
   const upMsg = payload as SignedObject<ArchiverUpMsg>
   const target = upMsg.downMsg.investigateMsg.target
@@ -104,6 +141,7 @@ const lostArchiverDownGossip: GossipHandler<SignedObject<ArchiverDownMsg>, Node[
 
   // Ignore gossip outside of Q1 and Q2
   if (![1, 2].includes(currentQuarter)) {
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `lost-archiver-down-gossip-reject: not in Q1 or Q2`)
     logging.warn('lostArchiverUpGossip: not in Q1 or Q2')
     return
   }
@@ -114,6 +152,57 @@ const lostArchiverDownGossip: GossipHandler<SignedObject<ArchiverDownMsg>, Node[
   if (!payload) { logging.warn(`lostArchiverDownGossip: missing payload`); return }
   if (!sender) { logging.warn(`lostArchiverDownGossip: missing sender`); return }
   if (!tracker) { logging.warn(`lostArchiverDownGossip: missing tracker`); return }
+  // if (!payload) throw new Error(`lostArchiverDownGossip: missing payload`)
+  // if (!sender) throw new Error(`lostArchiverDownGossip: missing sender`)
+  // if (!tracker) throw new Error(`lostArchiverDownGossip: missing tracker`)
+  // const error = funcs.errorForArchiverDownMsg(payload)
+  // if (error) {
+  //   logging.warn(`lostArchiverDownGossip: invalid payload error: ${error}, payload: ${inspect(payload)}`)
+  //   return
+  // }
+
+  // Validate payload structure and types
+  let err = validateTypes(payload, {
+    type: 's',
+    investigateMsg: 'o',
+    cycle: 's',
+    sign: 'o',
+  })
+  if (err) {
+    logging.warn(`lostArchiverDownGossip: invalid payload structure or type: ${err}`)
+    return
+  }
+
+  // Validate Sign Structure and Types
+  err = validateTypes(payload.sign, {
+    owner: 's',
+    sig: 's',
+  })
+  if (err) {
+    logging.warn(`lostArchiverDownGossip: invalid payload.sign structure or type: ${err}`)
+    return
+  }
+
+  // Check Signer Known
+  const signer = NodeList.byPubKey.get(payload.sign.owner)
+  if (!signer) {
+    logging.warn('lostArchiverDownGossip: Got down message from unknown node')
+  }
+
+  // Verify Sender as Original Signer
+  const isOrig = signer.id === sender
+  if (!isOrig) {
+    logging.warn('lostArchiverDownGossip: Sender is not the original signer')
+    return
+  }
+
+  // TODO:[] BUI - double check this logic
+  // Only accept original txs in quarter 1
+  if (isOrig && currentQuarter > 1) {
+    logging.warn(`lostArchiverDownGossip: Rejecting message as it's not Q1 and sender is original signer`)
+    return
+  }
+
   const error = funcs.errorForArchiverDownMsg(payload)
   if (error) {
     nestedCountersInstance.countEvent('lostArchivers', `lostArchiverDownGossip invalid payload ${error}`)      

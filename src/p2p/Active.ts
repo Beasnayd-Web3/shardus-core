@@ -28,6 +28,15 @@ const gossipActiveRoute: P2P.P2PTypes.GossipHandler<P2P.ActiveTypes.SignedActive
 ) => {
   profilerInstance.scopedProfileSectionStart('gossip-active', true)
   try {
+    // Ignore gossip outside of Q1 and Q2
+    if (![1, 2].includes(CycleCreator.currentQuarter)) {
+      /* prettier-ignore */ if (logFlags.error) warn('gossip-active: not in Q1 or Q2')
+      return
+    }
+    if (!payload) {
+      /* prettier-ignore */ if (logFlags.error) warn('gossip-active: missing payload')
+      return
+    }
     if (logFlags.p2pNonFatal) info(`Got active request: ${JSON.stringify(payload)}`)
     let err = ''
     err = validateTypes(payload, {
@@ -55,12 +64,6 @@ const gossipActiveRoute: P2P.P2PTypes.GossipHandler<P2P.ActiveTypes.SignedActive
     // Only accept original txs in quarter 1
     if (isOrig && CycleCreator.currentQuarter > 1) {
       /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `active:gossip-active CycleCreator.currentQuarter > 1 ${CycleCreator.currentQuarter}`)
-      return
-    }
-
-    // Do not forward gossip after quarter 2
-    if (!isOrig && CycleCreator.currentQuarter > 2) {
-      /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `active:gossip-active CycleCreator.currentQuarter > 2 ${CycleCreator.currentQuarter}`)
       return
     }
 
