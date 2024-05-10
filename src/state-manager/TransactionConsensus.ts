@@ -1310,6 +1310,7 @@ class TransactionConsenus {
 
       if (queueEntry.appliedReceipt != null) {
         nestedCountersInstance.countEvent(`consensus`, 'tryProduceReceipt appliedReceipt != null')
+        if (logFlags.debug) this.mainLogger.debug(`tryProduceReceipt ${queueEntry.logID} appliedReceipt != null`)
         return queueEntry.appliedReceipt
       }
 
@@ -1431,7 +1432,7 @@ class TransactionConsenus {
         }
       } else {
         if (queueEntry.completedConfirmedOrChallenge === false && queueEntry.isInExecutionHome) {
-          if (this.stateManager.consensusLog)
+          if (this.stateManager.consensusLog || logFlags.debug)
             this.mainLogger.info(
               `tryProduceReceipt ${queueEntry.logID} completedConfirmedOrChallenge === false and isInExecutionHome`
             )
@@ -1490,6 +1491,7 @@ class TransactionConsenus {
             queueEntry.receivedBestChallenger &&
             queueEntry.uniqueChallengesCount >= this.config.stateManager.minRequiredChallenges
           ) {
+            nestedCountersInstance.countEvent('consensus', 'tryProduceReceipt producing fail receipt from unique challenges')
             const appliedReceipt: AppliedReceipt = {
               txid: queueEntry.receivedBestChallenge.appliedVote.txid,
               result: false,
@@ -1527,11 +1529,11 @@ class TransactionConsenus {
             if (robustConfirmOrChallenge == null) {
               nestedCountersInstance.countEvent(
                 'consensus',
-                'tryProduceReceipt robustQueryConfirmOrChallenge challenge failed'
+                'tryProduceReceipt robust query for challenge failed'
               )
               if (logFlags.debug)
                 this.mainLogger.debug(
-                  `tryProduceReceipt: ${queueEntry.logID} failed to query robust confirm/challenge`
+                  `tryProduceReceipt: ${queueEntry.logID} failed to query robust challenge`
                 )
               return
             }
@@ -1542,12 +1544,13 @@ class TransactionConsenus {
                 this.mainLogger.debug(
                   `tryProduceReceipt: ${queueEntry.logID} received a confirm message. We have enough challenge messages which is better`
                 )
+              // just use our challenge receipt and return
               queueEntry.appliedReceipt = appliedReceipt
               queueEntry.appliedReceipt2 = appliedReceipt2
               return appliedReceipt
             }
 
-            // Received another challenge receipt. Compare ranks
+            // Received another challenge receipt. Compare ranks. Lower is better
             let bestNodeFromRobustQuery: Shardus.NodeWithRank
             if (queueEntry.executionGroupMap.has(robustConfirmOrChallenge.nodeId)) {
               bestNodeFromRobustQuery = queueEntry.executionGroupMap.get(
@@ -1562,7 +1565,7 @@ class TransactionConsenus {
             ) {
               nestedCountersInstance.countEvent(
                 'consensus',
-                'tryProduceReceipt robustQueryConfirmOrChallenge is better'
+                'tryProduceReceipt challenge from network is better than our challenge'
               )
               if (logFlags.debug)
                 this.mainLogger.debug(
@@ -2161,9 +2164,10 @@ class TransactionConsenus {
         // stop accepting the vote messages for this tx
         queueEntry.acceptVoteMessage = false
         const eligibleToConfirm = queueEntry.eligibleNodeIdsToConfirm.has(Self.id)
+        const eligibleToChallenge = true
         if (this.stateManager.consensusLog) {
           this.mainLogger.info(
-            `confirmOrChallenge: ${queueEntry.logID} hasWaitedLongEnough: true. Now we will try to confirm or challenge. eligibleToConfirm: ${eligibleToConfirm}`
+            `confirmOrChallenge: ${queueEntry.logID} hasWaitedLongEnough: true. Now we will try to confirm or challenge. eligibleToConfirm: ${eligibleToConfirm}, eligibleToChallenge: ${eligibleToChallenge}`
           )
         }
 
@@ -2334,12 +2338,20 @@ class TransactionConsenus {
       // Should check account integrity only when before states are different from best vote
       let doStatesMatch = true
       const voteBeforeStates = queueEntry.receivedBestVote.account_state_hash_before
-      const ourBeforeStates = Object.values(queueEntry.collectedData)
-      if (voteBeforeStates.length !== ourBeforeStates.length) {
+      const ourCollectedData = Object.values(queueEntry.collectedData)
+      if (voteBeforeStates.length !== ourCollectedData.length) {
         doStatesMatch = false
       }
       for (let i = 0; i < voteBeforeStates.length; i++) {
-        if (voteBeforeStates[i] !== ourBeforeStates[i].stateId) {
+        if (ourCollectedData[i] == null) {
+          doStatesMatch = false
+          nestedCountersInstance.countEvent(
+            'confirmOrChallenge',
+            'tryChallengeVoteAndShare canceled because ourCollectedData is null'
+          )
+          break
+        }
+        if (voteBeforeStates[i] !== ourCollectedData[i].stateId) {
           doStatesMatch = false
           nestedCountersInstance.countEvent(
             'confirmOrChallenge',
@@ -2472,6 +2484,7 @@ class TransactionConsenus {
 
     if (queueEntry.isInExecutionHome === false) {
       //we are not in the execution home, so we can't create or share a vote
+      if (logFlags.debug) this.mainLogger.debug(`createAndShareVote: ${queueEntry.logID} not in execution home`)
       return
     }
     if (Context.config.debug.forcedExpiration) {
@@ -2591,7 +2604,7 @@ class TransactionConsenus {
       }
       queueEntry.ourVoteHash = voteHash
 
-      if (logFlags.verbose || this.stateManager.consensusLog)
+      if (logFlags.debug || this.stateManager.consensusLog)
         this.mainLogger.debug(
           `createAndShareVote ${queueEntry.logID} created ourVote: ${utils.stringifyReduce(
             ourVote
@@ -2825,7 +2838,7 @@ class TransactionConsenus {
       let receivedConfirmedNode: Shardus.NodeWithRank
 
       queueEntry.topConfirmations.add(confirmOrChallenge.nodeId)
-      this.mainLogger.info(
+      if (this.stateManager.consensusLog) this.mainLogger.info(
         `tryAppendMessage: ${queueEntry.logID} current topConfirmations: ${queueEntry.topConfirmations.size}`
       )
 
