@@ -5919,6 +5919,7 @@ class TransactionQueue {
                 if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_challenge : ${queueEntry.logID} challenge from receipt2`)
                 this.updateTxState(queueEntry, 'fail')
                 this.removeFromQueue(queueEntry, currentIndex)
+                continue
               } if (receipt2 == null && queueEntry.receivedBestChallenge) {
                 const enoughUniqueChallenges = queueEntry.uniqueChallengesCount >= configContext.stateManager.minRequiredChallenges
                 if (enoughUniqueChallenges) {
