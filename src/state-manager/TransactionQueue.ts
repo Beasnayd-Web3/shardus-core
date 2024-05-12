@@ -50,7 +50,7 @@ import {
 import { isInternalTxAllowed, networkMode } from '../p2p/Modes'
 import { Node } from '@shardus/types/build/src/p2p/NodeListTypes'
 import { Logger as L4jsLogger } from 'log4js'
-import { shardusGetTime } from '../network'
+import { ipInfo, shardusGetTime } from '../network'
 import { InternalBinaryHandler } from '../types/Handler'
 import {
   BroadcastStateReq,
@@ -124,6 +124,7 @@ class TransactionQueue {
   stateManager: StateManager
 
   mainLogger: L4jsLogger
+  seqLogger: L4jsLogger
   fatalLogger: L4jsLogger
   shardLogger: L4jsLogger
   statsLogger: L4jsLogger
@@ -213,6 +214,7 @@ class TransactionQueue {
     this.useNewPOQ = this.config.stateManager.useNewPOQ
 
     this.mainLogger = logger.getLogger('main')
+    this.seqLogger = logger.getLogger('seq')
     this.fatalLogger = logger.getLogger('fatal')
     this.shardLogger = logger.getLogger('shardDump')
     this.statsLogger = logger.getLogger('statsDump')
@@ -241,7 +243,7 @@ class TransactionQueue {
     this.transactionProcessingQueueRunning = false
 
     this.processingLastRunTime = 0
-    this.processingMinRunBreak = 10 //20 //200ms breaks between processing loops
+    this.processingMinRunBreak = 200 //20 //200ms breaks between processing loops
     this.transactionQueueHasRemainingWork = false
 
     this.executeInOneShard = false
@@ -339,7 +341,8 @@ class TransactionQueue {
             undefined,
             queueEntry.executionGroup,
             false,
-            6
+            6,
+            queueEntry.acceptedTx.txId
           )
           queueEntry.gossipedCompleteData = true
         } finally {
@@ -487,7 +490,8 @@ class TransactionQueue {
               null,
               Array.from(nodesToSendTo),
               false,
-              4
+              4,
+              queueEntry.acceptedTx.txId
             )
             nestedCountersInstance.countEvent(`processing`, `forwarded final data to storage nodes`)
           }
@@ -581,7 +585,8 @@ class TransactionQueue {
                 null,
                 Array.from(nodesToSendTo),
                 false,
-                4
+                4,
+                queueEntry.acceptedTx.txId
               )
               nestedCountersInstance.countEvent(`processing`, `forwarded final data to storage nodes`)
             }
@@ -690,7 +695,8 @@ class TransactionQueue {
               tracker,
               sender,
               transactionGroup,
-              false
+              false,
+              queueEntry.acceptedTx.txId
             )
             /* prettier-ignore */ if (logFlags.verbose) console.log( 'queueEntry.isInExecutionHome', queueEntry.acceptedTx.txId, queueEntry.isInExecutionHome )
             // If our node is in the execution group, forward this raw tx to the subscribed archivers
@@ -764,7 +770,8 @@ class TransactionQueue {
                 undefined,
                 Array.from(nodesToSendTo),
                 false,
-                4
+                4,
+                queueEntry.acceptedTx.txId
               )
               nestedCountersInstance.countEvent(`processing`, `forwarded final data to storage nodes`)
             }
@@ -2212,7 +2219,7 @@ class TransactionQueue {
               if (transactionGroup.length > 1) {
                 // should consider only forwarding in some cases?
                 this.stateManager.debugNodeGroup(txId, timestamp, `share to neighbors`, transactionGroup)
-                this.p2p.sendGossipIn('spread_tx_to_group', acceptedTx, '', sender, transactionGroup, true)
+                this.p2p.sendGossipIn('spread_tx_to_group', acceptedTx, '', sender, transactionGroup, true, acceptedTx.txId)
                 /* prettier-ignore */ if (logFlags.verbose) console.log( 'spread_tx_to_group', txId, txQueueEntry.executionGroup.length, txQueueEntry.conensusGroup.length, txQueueEntry.transactionGroup.length )
                 this.addOriginalTxDataToForward(txQueueEntry)
               }
@@ -2273,6 +2280,9 @@ class TransactionQueue {
                       this.stateManager.config.p2p.useBinarySerializedEndpoints &&
                       this.stateManager.config.p2p.spreadTxToGroupSyncingBinary
                     ) {
+                      for (const node of this.stateManager.currentCycleShardData.syncingNeighborsTxGroup) {                
+                        this.seqLogger.info(`${shardusGetTime()} tx:${acceptedTx.txId} ${ipInfo.internalIp}->>${node.internalIp}: ${'spread_tx_to_group_syncing'}`)
+                      }
                       const request = acceptedTx as SpreadTxToGroupSyncingReq
                       this.p2p.tellBinary<SpreadTxToGroupSyncingReq>(
                         this.stateManager.currentCycleShardData.syncingNeighborsTxGroup,
@@ -2645,7 +2655,8 @@ class TransactionQueue {
         Self.id,
         queueEntry.executionGroup,
         true,
-        6
+        6,
+        queueEntry.acceptedTx.txId
       )
       queueEntry.gossipedCompleteData = true
       nestedCountersInstance.countEvent('gossipCompleteData', `stateList: ${stateList.length}`)
@@ -2846,6 +2857,7 @@ class TransactionQueue {
           try {
             if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.requestStateForTxBinary) {
               // GOLD-66 Error handling try/catch happens one layer outside of this function in process transactions
+              this.seqLogger.info(`${shardusGetTime()} tx:${message.txid} ${ipInfo.internalIp}->>${node.internalIp}: ${'request_state_for_tx'}`)
               result = (await this.p2p.askBinary<RequestStateForTxReq, RequestStateForTxRespSerialized>(
                 node,
                 InternalRouteEnum.binary_request_state_for_tx,
@@ -3034,6 +3046,7 @@ class TransactionQueue {
           this.stateManager.config.p2p.requestReceiptForTxBinary
         ) {
           try {
+            this.seqLogger.info(`${shardusGetTime()} tx:${message.txid} ${ipInfo.internalIp}->>${node.internalIp}: ${'request_receipt_for_tx'}`)
             result = await this.p2p.askBinary<
               RequestReceiptForTxReqSerialized,
               RequestReceiptForTxRespSerialized
@@ -3860,6 +3873,9 @@ class TransactionQueue {
     if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.broadcastStateBinary) {
       // convert legacy message to binary supported type
       const request = message as BroadcastStateReq
+      for (const node of nodes) {                
+        this.seqLogger.info(`${shardusGetTime()} tx:${message.txid} ${ipInfo.internalIp}->>${node.internalIp}: ${'broadcast_state'}`)
+      }
       this.p2p.tellBinary<BroadcastStateReq>(
         nodes,
         InternalRouteEnum.binary_broadcast_state,
@@ -4378,6 +4394,9 @@ class TransactionQueue {
           if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.broadcastFinalStateBinary) {
             // convert legacy message to binary supported type
             const request = message as BroadcastFinalStateReq
+            for (const node of filterdCorrespondingAccNodes) {                
+              this.seqLogger.info(`${shardusGetTime()} tx:${message.txid} ${ipInfo.internalIp}->>${node.internalIp}: ${'broadcast_finalstate'}`)
+            }
             this.p2p.tellBinary<BroadcastFinalStateReq>(
               filterdCorrespondingAccNodes,
               InternalRouteEnum.binary_broadcast_finalstate,
@@ -4498,6 +4517,7 @@ class TransactionQueue {
    */
   removeFromQueue(queueEntry: QueueEntry, currentIndex: number): void {
     // end all the pending txDebug timers
+    this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} ${queueEntry.acceptedTx.txId} removeFromQueue 0x00 state: ${queueEntry.state}`)
     for (const key in queueEntry.txDebug.startTime) {
       if (queueEntry.txDebug.startTime[key] != null) {
         this.txDebugMarkEndTime(queueEntry, key)
@@ -4569,6 +4589,7 @@ class TransactionQueue {
     const seenAccounts: SeenAccounts = {}
     let pushedProfilerTag = null
     const startTime = shardusGetTime()
+    this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x0000 _transactionQueue.length ${this._transactionQueue.length}`)
 
     const processStats: ProcessQueueStats = {
       totalTime: 0,
@@ -4630,6 +4651,8 @@ class TransactionQueue {
         nestedCountersInstance.countEvent('stateManager', 'currentCycleShardData == null early exit')
         return
       }
+
+      this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x000 _transactionQueue.length ${this._transactionQueue.length}`)
 
       if (this._transactionQueue.length === 0 && this.pendingTransactionQueue.length === 0) {
         return
@@ -4745,6 +4768,7 @@ class TransactionQueue {
       currentIndex++ //increment once so we can handle the decrement at the top of the loop and be safe about continue statements
 
       let lastRest = shardusGetTime()
+      this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x00 _transactionQueue.length ${this._transactionQueue.length}`)
       while (this._transactionQueue.length > 0) {
         // update current time with each pass through the loop
         currentTime = shardusGetTime()
@@ -4786,6 +4810,7 @@ class TransactionQueue {
 
         // eslint-disable-next-line security/detect-object-injection
         const queueEntry: QueueEntry = this._transactionQueue[currentIndex]
+        this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x01 currentIndex:${currentIndex} txId:${queueEntry.acceptedTx.txId} state:${queueEntry.state} entry`)
         const txTime = queueEntry.txKeys.timestamp
         const txAge = currentTime - txTime
 
@@ -6360,6 +6385,7 @@ class TransactionQueue {
 
   private setTXExpired(queueEntry: QueueEntry, currentIndex: number, message: string): void {
     /* prettier-ignore */ if (logFlags.verbose || this.stateManager.consensusLog) this.mainLogger.debug(`setTXExpired tx:${queueEntry.logID} ${message}  ts:${queueEntry.acceptedTx.timestamp} debug:${utils.stringifyReduce(queueEntry.debug)} state: ${queueEntry.state}, isInExecution: ${queueEntry.isInExecutionHome}`)
+    this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} ${queueEntry.acceptedTx.txId} setTXExpired 0x00 state: ${queueEntry.state} ${message}`)
     this.updateTxState(queueEntry, 'expired')
     this.removeFromQueue(queueEntry, currentIndex)
     this.app.transactionReceiptFail(
@@ -6529,6 +6555,7 @@ class TransactionQueue {
       let response
       if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.requestTxAndStateBinary) {
         const requestMessage = message as RequestTxAndStateReq
+        this.seqLogger.info(`${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} ${ipInfo.internalIp}->>${nodeToAsk.internalIp}: ${'request_tx_and_state'}`)
         response = await Comms.askBinary<RequestTxAndStateReq, RequestTxAndStateResp>(
           nodeToAsk,
           InternalRouteEnum.binary_request_tx_and_state,
@@ -7361,6 +7388,7 @@ class TransactionQueue {
     })
   }
   updateTxState(queueEntry: QueueEntry, nextState: string): void {
+    this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} ${queueEntry.acceptedTx.txId} updateTxState 0x00 old: ${queueEntry.state} new: ${nextState}`)
     const currentState = queueEntry.state
     this.txDebugMarkEndTime(queueEntry, currentState)
     queueEntry.state = nextState

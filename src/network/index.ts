@@ -76,7 +76,7 @@ export class NetworkClass extends EventEmitter {
     this.app = express()
     this.sn = null
     this.logger = logger
-    this.mainLogger = logger.getLogger('main')
+    this.mainLogger = logger.getLogger('main')    
     this.netLogger = logger.getLogger('net')
     this.timeout = config.network.timeout * 1000
     this.internalRoutes = {}
@@ -247,7 +247,7 @@ export class NetworkClass extends EventEmitter {
       /* prettier-ignore */ if (logFlags.net_verbose) mainLogger.info(`Initiating tell request with requestId: ${requestId}`)
       /* prettier-ignore */ if (logFlags.net_verbose) mainLogger.info(`requestId: ${requestId}, node: ${utils.logNode(node)}`)
       /* prettier-ignore */ if (logFlags.net_verbose) mainLogger.info(`route: ${route} ${subRoute}, message: ${message} requestId: ${requestId}`)
-      this.InternalTellCounter++
+      this.InternalTellCounter++      
       const promise = this.sn.send(node.internalPort, node.internalIp, data)
       promise.catch((err) => {
         /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`Network error (tell) on ${route} ${subRoute}: ${formatErrorMessage(err)}` )
