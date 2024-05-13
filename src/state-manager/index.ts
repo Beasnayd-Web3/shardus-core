@@ -4176,6 +4176,7 @@ class StateManager {
    * @param checkForNodeDown
    * @param checkForNodeLost
    * @param checkIsUpRecent
+   * @param isReadyValid
    * @returns A list of filtered nodes based on the settings passed in
    */
   filterValidNodesForInternalMessage(
@@ -4183,7 +4184,8 @@ class StateManager {
     debugMsg: string,
     checkForNodeDown = true,
     checkForNodeLost = true,
-    checkIsUpRecent = true
+    checkIsUpRecent = true,
+    isReadyValid = true
   ): ShardusTypes.Node[] {
     const filteredNodes = []
 
@@ -4198,7 +4200,9 @@ class StateManager {
         continue
       }
       const nodeStatus = node.status
-      if (nodeStatus != 'active' || potentiallyRemoved.has(node.id)) {
+
+      const filterReady = isReadyValid && nodeStatus === 'ready'
+      if ((!filterReady && nodeStatus !== 'active') || potentiallyRemoved.has(node.id)) {
         if (logErrors)
           if (logFlags.error)
             /* prettier-ignore */ this.mainLogger.error(`isNodeValidForInternalMessage node not active. ${nodeStatus} ${utils.stringifyReduce(nodeId)} ${debugMsg}`)

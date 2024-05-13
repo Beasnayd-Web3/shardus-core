@@ -2698,7 +2698,9 @@ class TransactionConsenus {
           gossipGroup,
           'createAndShareVote',
           true,
-          true
+          true,
+          true,
+          false
         )
         if (filteredNodes.length === 0) {
           /* prettier-ignore */ if (logFlags.error) this.mainLogger.error('createAndShareVote: filterValidNodesForInternalMessage no valid nodes left to try')
