@@ -4277,6 +4277,34 @@ class StateManager {
       return this.transactionRepair
     }
   }
+  handleChallengedTransaction(timestampedTx: ShardusTypes.TimestampedTx, executionKey: string) {
+    // schedule to reinject this transaction
+    if (Context.config.stateManager.reinjectChallengedTxs === true) {
+      // check if we are luck node for this account
+      const closetNodes = this.shardus.getClosestNodes(executionKey, 5, false)
+      if (closetNodes.length === 0) return
+      if (closetNodes.includes(Self.id) === false) return
+
+      let txToReinject = Object.assign({}, timestampedTx.tx) // make a copy
+      let waitTime = CycleChain.newest.duration * 1.5 * 1000 // todo: check with Omar
+      setTimeout(async () => {
+        let success = false
+        let maxRetry = 10
+        let count = 0
+        while (success === false && count <  maxRetry) {
+          count++
+          try {
+            const reinjectResult = await this.shardus.put(txToReinject)
+            this.mainLogger.debug(`reinjectChallengedTxs retry: ${count} ${utils.stringify(reinjectResult)}`)
+            if (reinjectResult.success === true) success = true
+          } catch (e) {
+            this.mainLogger.error(`reinjectChallengedTxs error: ${e.message}`)
+          }
+          if (success === false) await utils.sleep(3000)
+        }
+      }, waitTime)
+    }
+  }
 
   startProcessingCycleSummaries() {
     this.processCycleSummaries = true
