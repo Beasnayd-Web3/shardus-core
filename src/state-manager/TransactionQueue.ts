@@ -5059,9 +5059,10 @@ class TransactionQueue {
             // maybe we missed the spread_appliedReceipt2 gossip, go to await final data if we have a confirmation
             // we will request the final data (and probably receipt2)
             if (configContext.stateManager.disableTxExpiration && hasSeenVote) {
-              nestedCountersInstance.countEvent('txExpired', `> timeM3 + confirmSeenExpirationTime hasSeenVote: ${hasSeenVote} waitForReceiptOnly: ${queueEntry.waitForReceiptOnly}`)
+              nestedCountersInstance.countEvent('txExpired', `> timeM3 + confirmSeenExpirationTime state: ${queueEntry.state} hasSeenVote: ${hasSeenVote} hasSeenConfirmation: ${hasSeenConfirmation} waitForReceiptOnly: ${queueEntry.waitForReceiptOnly}`)
               if(this.config.stateManager.txStateMachineChanges){
-                this.updateTxState(queueEntry, 'await final data')
+                // this.updateTxState(queueEntry, 'await final data')
+                this.updateTxState(queueEntry, 'consensing')
               } else {
                 this.updateTxState(queueEntry, 'consensing')
               }
@@ -5193,7 +5194,7 @@ class TransactionQueue {
           }
 
           // Have a hard cap where we ALMOST expire but NOT remove TXs from queue after time > M3
-          if (txAge > timeM3 + extraTime && queueEntry.isInExecutionHome && queueEntry.almostExpired == null) {
+          if (txAge > timeM3 + extraTime && queueEntry.isInExecutionHome && queueEntry.almostExpired == null && configContext.stateManager.disableTxExpiration === false) {
             const hasVoted = queueEntry.ourVote != null
             const receivedVote = queueEntry.receivedBestVote != null
             if (!receivedVote && !hasVoted && queueEntry.almostExpired == null) {
@@ -5329,6 +5330,18 @@ class TransactionQueue {
                 }
               }
               queueEntry.executionDebug.processElapsed = shardusGetTime() - time
+            } else {
+              const upstreamTx = this.processQueue_getUpstreamTx(seenAccounts, queueEntry)
+              if (upstreamTx == null) {
+                nestedCountersInstance.countEvent('processing', 'busy waiting the upstream tx.' +
+                  ' but it is null')
+              } else {
+                if (upstreamTx.logID === queueEntry.logID) {
+                  nestedCountersInstance.countEvent('processing', 'busy waiting the upstream tx but it is same txId')
+                } else {
+                  nestedCountersInstance.countEvent('processing', `busy waiting the upstream tx to complete. state ${queueEntry.state}`)
+                }
+              }
             }
             this.processQueue_markAccountsSeen(seenAccounts, queueEntry)
           }
@@ -5389,6 +5402,7 @@ class TransactionQueue {
               if (queueEntry.pendingDataRequest === true) {
                 //early out after marking seen, because we are already asking for data
                 //need to review this in context of sharding
+                nestedCountersInstance.countEvent('processing', 'awaiting data. pendingDataRequest')
                 continue
               }
 
@@ -5407,6 +5421,7 @@ class TransactionQueue {
 
                 //TODO may need a flag that know if a TX was stuck until time m.. then let it not
                 //ask for other accoun data right away...
+                nestedCountersInstance.countEvent(`processing`, `awaiting data. stuck in line`)
                 continue
               }
 
@@ -5582,6 +5597,7 @@ class TransactionQueue {
                 }
               } else {
                 queueEntry.executionDebug.logBusy = 'has all, but busy'
+                nestedCountersInstance.countEvent('processing', 'has all, but busy')
               }
               this.processQueue_markAccountsSeen(seenAccounts, queueEntry)
             } else {
@@ -5666,11 +5682,9 @@ class TransactionQueue {
                   )
                 }
 
-                if (isReceiptMatchPreApply && queueEntry.isInExecutionHome) {
-                  nestedCountersInstance.countEvent('consensus', 'hasAppliedReceiptMatchingPreApply: true')
-                  /* prettier-ignore */ if (logFlags.verbose) if (logFlags.playback) this.logger.playbackLogNote('shrd_consensingComplete_madeReceipt', `${shortID}`, `qId: ${queueEntry.entryID}  `)
-
-                  let shouldSendReceipt = false
+                // we should send the receipt if we are in the top 5 nodes
+                let shouldSendReceipt = false
+                if (queueEntry.isInExecutionHome) {
                   let numberOfSharingNodes = configContext.stateManager.nodesToGossipAppliedReceipt
                   if (numberOfSharingNodes > queueEntry.executionGroup.length) numberOfSharingNodes = queueEntry.executionGroup.length
                   const highestRankedNodeIds = queueEntry.executionGroup.slice(0, numberOfSharingNodes).map(n => n.id)
@@ -5681,7 +5695,11 @@ class TransactionQueue {
                   } else {
                     nestedCountersInstance.countEvent('consensus', 'shouldSendReceipt: false')
                   }
-                  // shouldSendReceipt = queueEntry.recievedAppliedReceipt == null
+                }
+
+                if (isReceiptMatchPreApply && queueEntry.isInExecutionHome) {
+                  nestedCountersInstance.countEvent('consensus', 'hasAppliedReceiptMatchingPreApply: true')
+                  /* prettier-ignore */ if (logFlags.verbose) if (logFlags.playback) this.logger.playbackLogNote('shrd_consensingComplete_madeReceipt', `${shortID}`, `qId: ${queueEntry.entryID}  `)
 
                   //todo check cant_apply flag to make sure a vote can form with it!
                   //also check if failed votes will work...?
@@ -5859,6 +5877,8 @@ class TransactionQueue {
                   }
                 }
               }
+            } else {
+              nestedCountersInstance.countEvent('consensus', 'busy waiting')
             }
             this.processQueue_markAccountsSeen(seenAccounts, queueEntry)
           }
@@ -6091,10 +6111,15 @@ class TransactionQueue {
               const upstreamTx = this.processQueue_getUpstreamTx(seenAccounts, queueEntry)
               if (queueEntry.executionDebug == null) queueEntry.executionDebug = {}
               queueEntry.executionDebug.logFinalData = `has all final data, but busy. upstreamTx: ${upstreamTx?.logID}`
-              nestedCountersInstance.countEvent('stateManager', 'shrd_awaitFinalData busy')
-              if (logFlags.verbose) {
-                this.statemanager_fatal(`await final data`, `${queueEntry.logID} upstream account seen in await final data. Our queueEntry: ${utils.stringify(queueEntry)}`);
-                this.statemanager_fatal(`await final data`, `${queueEntry.logID} upstream account seen in await final data. Upstream queueEntry: ${utils.stringify(upstreamTx)}`);
+              if (upstreamTx == null) {
+                queueEntry.executionDebug.logFinalData = `has all final data, but busy. upstreamTx: null`
+                nestedCountersInstance.countEvent('stateManager', 'shrd_awaitFinalData busy. upstreamTx: null')
+              } else {
+                if (upstreamTx.acceptedTx.txId === queueEntry.acceptedTx.txId) {
+                  nestedCountersInstance.countEvent('stateManager', 'shrd_awaitFinalData busy. upstreamTx same tx')
+                } else {
+                  nestedCountersInstance.countEvent('stateManager', `shrd_awaitFinalData busy. upstream tx state: ${upstreamTx?.state}`)
+                }
               }
             }
           }
