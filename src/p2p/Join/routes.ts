@@ -27,7 +27,6 @@ import { nestedCountersInstance } from '../../utils/nestedCounters'
 import { profilerInstance } from '../../utils/profiler'
 import { checkGossipPayload, verifyOriginalSenderAndQuarter } from '../../utils/GossipValidation'
 import * as acceptance from './v2/acceptance'
-import { attempt } from '../Utils'
 import { getStandbyNodesInfoMap, saveJoinRequest, isOnStandbyList } from './v2'
 import { addFinishedSyncing } from './v2/syncFinished'
 import { processNewUnjoinRequest, UnjoinRequest } from './v2/unjoin'
@@ -401,7 +400,7 @@ const gossipJoinRoute: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.JoinRequest, P2P
         return
       }
 
-      //  Verify if sender is original signer . If so check if in Q1 to continue.
+      //  If sender is original sender, check if in Q1 to continue.
       if (!verifyOriginalSenderAndQuarter(payload, sender, 'gossip-join')) {
         return
       }
@@ -603,7 +602,7 @@ const gossipSyncFinishedRoute: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.Finished
       return
     }
 
-    //  Verify if sender is original signer . If so check if in Q1 to continue.
+    //  If original sender check if in Q1 to continue.
     if (!verifyOriginalSenderAndQuarter(payload, sender, 'gossip-sync-finished')) {
       return
     }
@@ -655,7 +654,7 @@ const gossipStandbyRefresh: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.StandbyRefr
 
     //if (logFlags.p2pNonFatal) info(`Got scale request: ${JSON.stringify(payload)}`)
 
-    //  Verify if sender is original signer . If so check if in Q1 to continue.
+    //  If original sender check if in Q1 to continue.
     if (!verifyOriginalSenderAndQuarter(payload, sender, 'gossip-standby-refresh')) {
       return
     }
