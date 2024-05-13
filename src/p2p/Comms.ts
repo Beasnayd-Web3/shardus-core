@@ -663,7 +663,8 @@ export function isNodeValidForInternalMessage(
   checkForNodeDown = true,
   checkForNodeLost = true,
   checkIsUpRecent = true,
-  checkNodesRotationBounds = false
+  checkNodesRotationBounds = false,
+  shouldGossipToReadyNodes = false
 ): boolean {
   const logErrors = logFlags.debug
   if (node == null) {
@@ -690,9 +691,10 @@ export function isNodeValidForInternalMessage(
   // this could cause different cycle records based on potentiallyRemoved
   // we should create a new if check called checkPotentiallyRemoved and review
   // each calling site (or site that calls the gossip, yay more parameters)
+  const gossipToReady = shouldGossipToReadyNodes && nodeStatus === 'ready'
 
-  // Also may add a flag to change if we also allow other statuses
-  if (nodeStatus != 'active' || NodeList.potentiallyRemoved.has(node.id)) {
+  // Check node status and removal status, logging errors if enabled
+  if ((!gossipToReady && nodeStatus !== 'active') || NodeList.potentiallyRemoved.has(node.id)) {
     if (logErrors)
       if (logFlags.error)
         /* prettier-ignore */ error(`isNodeValidForInternalMessage node not active. ${nodeStatus} ${utils.stringifyReduce(node.id)} ${debugMsg}`)
@@ -809,7 +811,8 @@ export async function sendGossip(
   inpNodes: Shardus.Node[] | Shardus.NodeWithRank[] = NodeList.byIdOrder, // Joining nodes need gossip too; we don't
   // send to ourself
   isOrigin = false,
-  factor = -1
+  factor = -1,
+  shouldGossipToReadyNodes = false
 ) {
   //console.log('entered sendGossip gossiping ', type)
   let msgSize = cUninitializedSize
@@ -923,7 +926,9 @@ export async function sendGossip(
             'sendGossip',
             config.p2p.preGossipDownCheck,
             config.p2p.preGossipLostCheck,
-            config.p2p.preGossipRecentCheck
+            config.p2p.preGossipRecentCheck,
+            false,
+            shouldGossipToReadyNodes
           )
         ) {
           return true
