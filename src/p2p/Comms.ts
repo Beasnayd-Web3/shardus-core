@@ -664,7 +664,7 @@ export function isNodeValidForInternalMessage(
   checkForNodeLost = true,
   checkIsUpRecent = true,
   checkNodesRotationBounds = false,
-  shouldGossipToReadyNodes = false
+  shouldGossipToReadyNodes = true
 ): boolean {
   const logErrors = logFlags.debug
   if (node == null) {
@@ -812,7 +812,7 @@ export async function sendGossip(
   // send to ourself
   isOrigin = false,
   factor = -1,
-  shouldGossipToReadyNodes = false
+  shouldGossipToReadyNodes = true
 ) {
   //console.log('entered sendGossip gossiping ', type)
   let msgSize = cUninitializedSize
@@ -857,9 +857,8 @@ export async function sendGossip(
     return msgSize
   }
 
-
   let gossipFactor = config.p2p.gossipFactor
-  if(config.p2p.dynamicGossipFactor){
+  if (config.p2p.dynamicGossipFactor) {
     gossipFactor = calculateGossipFactor(nodes.length)
   }
   if (factor > 0) {

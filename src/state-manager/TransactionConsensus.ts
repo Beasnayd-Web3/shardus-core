@@ -960,7 +960,7 @@ class TransactionConsenus {
             // Gossip further
             const sender = null
             const gossipGroup = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
-            Comms.sendGossip('spread_confirmOrChallenge', payload, '', sender, gossipGroup, false, 10)
+            Comms.sendGossip('spread_confirmOrChallenge', payload, '', sender, gossipGroup, false, 10, false)
             queueEntry.gossipedConfirmOrChallenge = true
           }
         } catch (e) {
@@ -2312,7 +2312,16 @@ class TransactionConsenus {
 
       //Share message to tx group
       const gossipGroup = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
-      Comms.sendGossip('spread_confirmOrChallenge', signedConfirmMessage, '', Self.id, gossipGroup, true, 10)
+      Comms.sendGossip(
+        'spread_confirmOrChallenge',
+        signedConfirmMessage,
+        '',
+        Self.id,
+        gossipGroup,
+        true,
+        10,
+        false
+      )
       this.tryAppendMessage(queueEntry, signedConfirmMessage)
       queueEntry.gossipedConfirmOrChallenge = true
       queueEntry.completedConfirmedOrChallenge = true
@@ -2385,7 +2394,16 @@ class TransactionConsenus {
 
       //Share message to tx group
       const gossipGroup = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
-      Comms.sendGossip('spread_confirmOrChallenge', signedChallengeMessage, '', null, gossipGroup, true, 10)
+      Comms.sendGossip(
+        'spread_confirmOrChallenge',
+        signedChallengeMessage,
+        '',
+        null,
+        gossipGroup,
+        true,
+        10,
+        false
+      )
       this.tryAppendMessage(queueEntry, signedChallengeMessage)
       queueEntry.gossipedConfirmOrChallenge = true
       queueEntry.completedConfirmedOrChallenge = true
