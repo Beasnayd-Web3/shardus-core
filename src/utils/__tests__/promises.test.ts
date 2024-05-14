@@ -1,4 +1,4 @@
-import { groupResolvePromises } from '../../../../src/utils'
+import { groupResolvePromises } from '..'
 
 function generatePromise(data: string, delayInMs: number): Promise<string> {
   return new Promise((resolve) => {

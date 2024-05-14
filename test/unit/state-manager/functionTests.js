@@ -1,3 +1,4 @@
+// @ts-nocheck
 /*eslint-disable*/
 
 var fs = require('fs')

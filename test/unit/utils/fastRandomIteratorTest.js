@@ -1,4 +1,3 @@
-/* eslint-disable */
 //import * as FastRandomIterator from "../../../src/utils/FastRandomIterator"
 //import FastRandomIterator from "../../../src/utils/FastRandomIterator"
 //import * as utils from '../utils'

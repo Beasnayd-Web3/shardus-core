@@ -1,4 +1,3 @@
-/* eslint-disable */
 N = 1200 // Size of array
 
 for (let k = 1; k < 10000; k++) {

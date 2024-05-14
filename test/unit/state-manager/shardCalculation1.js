@@ -1,4 +1,5 @@
-/* eslint-disable */
+// @ts-nocheck
+/*eslint-disable*/
 // const StateManager = require('../../../src/state-manager')
 //const ShardFunctions = require('../../../src/state-manager/shardFunctions.js')
 const ShardFunctions = require('../../../build/src/state-manager/shardFunctions2.js').default

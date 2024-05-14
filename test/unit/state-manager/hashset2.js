@@ -1,4 +1,3 @@
-/* eslint-disable */
 const StateManager = require('../../../src/state-manager')
 
 const crypto = require('@shardus/crypto-utils')
