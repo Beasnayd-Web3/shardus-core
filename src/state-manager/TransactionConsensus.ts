@@ -33,6 +33,7 @@ import {
   RequestReceiptForTxReq,
   RequestReceiptForTxResp,
   WrappedResponses,
+  TimestampRemoveRequest
 } from './state-manager-types'
 import { shardusGetTime } from '../network'
 import { robustQuery } from '../p2p/Utils'
@@ -256,6 +257,25 @@ class TransactionConsenus {
       }
     )
 
+    this.p2p.registerInternal(
+      'remove_timestamp_cache',
+      async (
+        payload: TimestampRemoveRequest,
+        respond: (result: boolean) => unknown
+      ) => {
+        const { txId, receipt2, cycleCounter } = payload
+        /* eslint-disable security/detect-object-injection */
+        if (this.txTimestampCache[cycleCounter] && this.txTimestampCache[cycleCounter][txId]) {
+          // remove the timestamp from the cache
+          delete this.txTimestampCache[cycleCounter][txId]
+          this.txTimestampCache[cycleCounter][txId] = null
+          this.mainLogger.debug(`Removed timestamp cache for txId: ${txId}, timestamp: ${JSON.stringify(this.txTimestampCache[cycleCounter][txId])}`)
+          nestedCountersInstance.countEvent('consensus', 'remove_timestamp_cache')
+        }
+        await respond(true)
+      }
+    )
+
     const getTxTimestampBinary: Route<InternalBinaryHandler<Buffer>> = {
       name: InternalRouteEnum.binary_get_tx_timestamp,
       handler: async (payload, respond, header) => {
@@ -285,6 +305,7 @@ class TransactionConsenus {
           ) {
             // eslint-disable-next-line security/detect-object-injection
             tsReceipt = this.txTimestampCache[readableReq.cycleCounter][readableReq.txId]
+            this.mainLogger.debug(`Found timestamp cache for txId: ${readableReq.txId}, timestamp: ${JSON.stringify(tsReceipt)}`)
             return respond(tsReceipt, serializeGetTxTimestampResp)
           } else {
             const tsReceipt: Shardus.TimestampReceipt = this.generateTimestampReceipt(
@@ -985,7 +1006,7 @@ class TransactionConsenus {
       timestamp: shardusGetTime(),
     }
     const signedTsReceipt = this.crypto.sign(tsReceipt)
-    /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`Timestamp receipt generated for txId ${txId}: ${utils.stringifyReduce(signedTsReceipt)}`)
+    /* prettier-ignore */ this.mainLogger.debug(`Timestamp receipt generated for txId ${txId}: ${utils.stringifyReduce(signedTsReceipt)}`)
 
     // caching ts receipt for later nodes
     if (!this.txTimestampCache[signedTsReceipt.cycleCounter]) {

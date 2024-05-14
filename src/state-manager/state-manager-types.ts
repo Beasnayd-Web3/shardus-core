@@ -1239,6 +1239,12 @@ export type CachedAppData = {
   cycle: number
 }
 
+export interface TimestampRemoveRequest {
+  txId: string
+  receipt2: AppliedReceipt2
+  cycleCounter: number
+}
+
 export type CacheTopic = {
   topic: string
   maxCycleAge: number

@@ -4500,7 +4500,7 @@ class TransactionQueue {
    * @param {QueueEntry} queueEntry
    * @param {number} currentIndex
    */
-  removeFromQueue(queueEntry: QueueEntry, currentIndex: number): void {
+  removeFromQueue(queueEntry: QueueEntry, currentIndex: number, archive = true): void {
     // end all the pending txDebug timers
     for (const key in queueEntry.txDebug.startTime) {
       if (queueEntry.txDebug.startTime[key] != null) {
@@ -4512,6 +4512,11 @@ class TransactionQueue {
     if (queueEntry.txDebug) this.dumpTxDebugToStatList(queueEntry)
     this._transactionQueue.splice(currentIndex, 1)
     this._transactionQueueByID.delete(queueEntry.acceptedTx.txId)
+
+    if (archive === false) {
+      if (logFlags.debug) this.mainLogger.debug(`removeFromQueue: ${queueEntry.logID} done. No archive`);
+      return
+    }
 
     queueEntry.archived = true
     //compact the queue entry before we push it!
@@ -4551,7 +4556,7 @@ class TransactionQueue {
       this.archivedQueueEntriesByID.delete(this.archivedQueueEntries[0].acceptedTx.txId)
       this.archivedQueueEntries.shift()
     }
-    if (logFlags.debug) this.mainLogger.debug(`removeFromQueue: ${queueEntry.logID} done`);
+    if (logFlags.debug) this.mainLogger.debug(`removeFromQueue: ${queueEntry.logID} and added to archive done`);
   }
 
   /***
@@ -5621,7 +5626,7 @@ class TransactionQueue {
               if (this.useNewPOQ) {
                 this.stateManager.transactionConsensus.confirmOrChallenge(queueEntry)
 
-                if (queueEntry.pendingConfirmOrChallenge.size > 0) {
+                if (queueEntry.pendingConfirmOrChallenge.size > 0 && queueEntry.robustQueryVoteCompleted === true && queueEntry.acceptVoteMessage === false) {
                   this.mainLogger.debug(`processAcceptedTxQueue2 consensing : ${queueEntry.logID} pendingConfirmOrChallenge.size = ${queueEntry.pendingConfirmOrChallenge.size}`)
                   for (const [nodeId, confirmOrChallenge] of queueEntry.pendingConfirmOrChallenge) {
                     this.stateManager.transactionConsensus.tryAppendMessage(queueEntry, confirmOrChallenge)
@@ -5729,8 +5734,8 @@ class TransactionQueue {
                   this.mainLogger.debug(`processAcceptedTxQueue2 tryProduceReceipt isChallengedReceipt : ${queueEntry.logID}. remove from queue`)
                   this.updateTxState(queueEntry, 'fail')
                   // this.processQueue_clearAccountsSeen(seenAccounts, queueEntry)
-                  this.stateManager.handleChallengedTransaction(queueEntry.acceptedTx.data, queueEntry.uniqueKeys[0])
-                  this.removeFromQueue(queueEntry, currentIndex)
+                  this.stateManager.handleChallengedTransaction(queueEntry)
+                  this.removeFromQueue(queueEntry, currentIndex, false) // we don't want to archive this
                   continue
                 }
 
@@ -6039,7 +6044,6 @@ class TransactionQueue {
 
                   // start request process for missing data
                   const timeSinceLastFinalDataRequest = shardusGetTime() - queueEntry.lastFinalDataRequestTimestamp
-                  // console.log(`thant: ${queueEntry.logID} timeSinceLastFinalDataRequest: ${timeSinceLastFinalDataRequest}, shouldStartFinalDataRequest: ${shouldStartFinalDataRequest}`)
                   if (this.config.stateManager.canRequestFinalData && shouldStartFinalDataRequest && timeSinceLastFinalDataRequest > 5000) {
                     nestedCountersInstance.countEvent('stateManager', 'requestFinalData')
                     this.requestFinalData(queueEntry, missingAccounts)
