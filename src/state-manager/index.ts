@@ -4301,14 +4301,18 @@ class StateManager {
       if (closetNodes.includes(Self.id) === false) return
 
       let txToReinject = Object.assign({}, timestampedTx.tx) // make a copy
-      let reinjectTimestamp = timestampedTx.timestampReceipt.timestamp + 15 * 1000
+      let reinjectTimestamp = timestampedTx.timestampReceipt.timestamp + Context.config.p2p.cycleDuration * 1000
       let now = shardusGetTime()
       if (now > reinjectTimestamp) {
         reinjectTimestamp = now + Context.config.p2p.cycleDuration * 1000
       }
       let waitTime = reinjectTimestamp - now
       nestedCountersInstance.countEvent('reinjectChallengedTxs', `waitTime: ${waitTime}`)
+      this.mainLogger.debug(`reinjectChallengedTxs waitTime: ${waitTime} txId: ${acceptedTx.txId}`)
       setTimeout(async () => {
+        // remove the archive tx if it is still there
+        this.transactionQueue.removeTxFromArchivedQueue(acceptedTx.txId)
+
         let success = false
         let maxRetry = 3
         let count = 0

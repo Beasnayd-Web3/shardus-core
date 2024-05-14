@@ -5730,12 +5730,27 @@ class TransactionQueue {
 
                 // remove from the queue if receipt2 is a challenged receipt
                 if (isChallengedReceipt) {
-                  nestedCountersInstance.countEvent('consensus', 'isChallengedReceipt: true remove from queue')
-                  this.mainLogger.debug(`processAcceptedTxQueue2 tryProduceReceipt isChallengedReceipt : ${queueEntry.logID}. remove from queue`)
+                  const txId = queueEntry.acceptedTx.txId
+                  const logID = queueEntry.logID
                   this.updateTxState(queueEntry, 'fail')
-                  // this.processQueue_clearAccountsSeen(seenAccounts, queueEntry)
-                  this.stateManager.handleChallengedTransaction(queueEntry)
-                  this.removeFromQueue(queueEntry, currentIndex, false) // we don't want to archive this
+                  try {
+                    await this.stateManager.handleChallengedTransaction(queueEntry)
+                  } catch (ex) {
+                    this.mainLogger.error(
+                      `processAcceptedTxQueue2 handleChallengedTransaction: ${ex.name}: ${ex.message} at ${ex.stack}`
+                    )
+                  }
+                  this.removeFromQueue(queueEntry, currentIndex, true) // we don't want to archive this
+                  nestedCountersInstance.countEvent('consensus', 'isChallengedReceipt: true removing from queue')
+                  this.mainLogger.debug(`processAcceptedTxQueue2 tryProduceReceipt isChallengedReceipt : ${logID}. remove from queue`)
+                  const checkQueueEntry = this._transactionQueueByID.get(txId)
+                  const checkQueueEntry2 = this._transactionQueue.find(q => q.acceptedTx.txId === txId)
+                  if (checkQueueEntry != null) {
+                    this.mainLogger.debug(`processAcceptedTxQueue2 tryProduceReceipt isChallengedReceipt : ${logID}. checkQueueEntry is not null. Remove from queue failed`)
+                  }
+                  if (checkQueueEntry2 != null) {
+                    this.mainLogger.debug(`processAcceptedTxQueue2 tryProduceReceipt isChallengedReceipt : ${logID}. checkQueueEntry2 is not null. Remove from queue failed`)
+                  }
                   continue
                 }
 
@@ -7436,6 +7451,15 @@ class TransactionQueue {
         uniqueChallenges: queueEntry.uniqueChallengesCount
       }
     })
+  }
+  removeTxFromArchivedQueue(txId: string) {
+    // remove from the archived queue array and map by txId
+    const index = this.archivedQueueEntries.findIndex((queueEntry) => queueEntry.acceptedTx.txId === txId)
+    if (index !== -1) {
+      this.mainLogger.debug(`Removing tx ${txId} from archived queue`)
+      this.archivedQueueEntries.splice(index, 1)
+    }
+    if (this.archivedQueueEntriesByID.has(txId)) delete this.archivedQueueEntriesByID[txId]
   }
   updateTxState(queueEntry: QueueEntry, nextState: string): void {
     const currentState = queueEntry.state
