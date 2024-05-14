@@ -626,6 +626,9 @@ export function registerInternalBinary(route: string, handler: InternalBinaryHan
       } catch (err: unknown) {
         /* prettier-ignore */ error(`registerInternalBinary: route: ${route} responseHeaders: ${JSON.stringify(responseHeaders)}, Response: ${utils.SerializeToJsonString(response)}, Error: ${utils.formatErrorMessage(err)}`)
         /* prettier-ignore */ nestedCountersInstance.countEvent('registerInternalBinary', `respondWrapped ${route} error`)
+        if(route == InternalRouteEnum.binary_get_tx_timestamp) {
+          console.log('[gold-debug]: binary_get_tx_timestamp', utils.errorToStringFull(err))
+        }
         return 0
       }
     }
