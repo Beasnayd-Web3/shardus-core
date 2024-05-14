@@ -79,7 +79,7 @@ import {
   serializeSignAppDataResp,
 } from '../types/SignAppDataResp'
 import { safeStringify } from '../utils'
-import { isNodeInRotationBounds } from '../p2p/Utils'
+import { generateUUID, isNodeInRotationBounds } from '../p2p/Utils'
 import ShardFunctions from '../state-manager/shardFunctions'
 import SocketIO from 'socket.io'
 
@@ -991,7 +991,9 @@ class Shardus extends EventEmitter {
   }
 
   async _timestampAndQueueTransaction(tx: ShardusTypes.OpaqueTransaction, appData: any, global = false, noConsensus = false) {
+    const uuid = generateUUID();
     const injectedTimestamp = this.app.getTimestampFromTransaction(tx, appData);
+    console.log(`[gold-debug] reqId: ${uuid} _timestampAndQueueTransaction injectedTimestamp: ${injectedTimestamp}`)
 
     const txId = this.app.calculateTxId(tx);
     let timestampReceipt: ShardusTypes.TimestampReceipt;
@@ -1001,6 +1003,7 @@ class Shardus extends EventEmitter {
         if (logFlags.p2pNonFatal && logFlags.console) console.log("Dapp request to generate a new timestmap for the tx");
       }
       timestampReceipt = await this.stateManager.transactionConsensus.askTxnTimestampFromNode(txId);
+      console.log(`[gold-debug] reqId: ${uuid} _timestampAndQueueTransaction network generated timestamp: ${timestampReceipt.timestamp} for txId: ${txId}`)
       /* prettier-ignore */
       if (logFlags.p2pNonFatal && logFlags.console) console.log("Network generated a" +
         " timestamp", txId, timestampReceipt);
@@ -1028,6 +1031,7 @@ class Shardus extends EventEmitter {
       timestampedTx = { tx };
     }
 
+    console.log(`[gold-debug] reqId: ${uuid} _timestampAndQueueTransaction timestampedTx: ${timestampedTx}`)
     // Perform fast validation of the transaction fields
     const validateResult = this.app.validate(timestampedTx, appData);
     if (validateResult.success === false) {
@@ -1039,6 +1043,8 @@ class Shardus extends EventEmitter {
     // Ask App to crack open tx and return timestamp, id (hash), and keys
     const { timestamp, id, keys, shardusMemoryPatterns } = this.app.crack(timestampedTx, appData);
     // console.log('app.crack results', timestamp, id, keys)
+
+    console.log(`[gold-debug] reqId: ${uuid} _timestampAndQueueTransaction timestamp post crack: ${timestamp}, pre crack: ${timestampReceipt.timestamp}`)
 
     // Validate the transaction's sourceKeys & targetKeys
     if (this.config.debug.checkAddressFormat && !isValidShardusAddress(keys.allKeys)) {
