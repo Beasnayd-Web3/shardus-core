@@ -807,6 +807,7 @@ class TransactionConsenus {
               const receivedReceiptConfirmNode = receivedAppliedReceipt2.confirmOrChallenge.nodeId
               if (localReceiptConfirmNode === receivedReceiptConfirmNode) {
                 if (Context.config.stateManager.stuckTxQueueFix) {
+                  // we should not care about the rank for receipt2+data gossips
                   shouldForward = true
                 } else {
                   shouldForward = false

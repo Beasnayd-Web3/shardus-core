@@ -5048,7 +5048,7 @@ class TransactionQueue {
                   //todo only keep on for temporarliy
                   /* prettier-ignore */ nestedCountersInstance.countEvent('txExpired', `> M2 canceled due to upstream TXs. sieveT:${queueEntry.txSieveTime}`)
                   this.setTXExpired(queueEntry, currentIndex, 'm2, processing or awaiting')
-                  if (configContext.stateManager.stuckTxQueueFix) continue
+                  if (configContext.stateManager.stuckTxQueueFix) continue // we need to skip this TX and move to the next one
                 }
                 if (configContext.stateManager.stuckTxQueueFix === false) continue
               }
@@ -5073,6 +5073,7 @@ class TransactionQueue {
               nestedCountersInstance.countEvent('txExpired', `> timeM3 + confirmSeenExpirationTime state: ${queueEntry.state} hasSeenVote: ${hasSeenVote} hasSeenConfirmation: ${hasSeenConfirmation} waitForReceiptOnly: ${queueEntry.waitForReceiptOnly}`)
               if(this.config.stateManager.txStateMachineChanges){
                 if (configContext.stateManager.stuckTxQueueFix) {
+                  // make sure we are not resetting the state and causing state start timestamp to be updated repeatedly
                   if (queueEntry.state !== 'await final data') this.updateTxState(queueEntry, 'await final data')
                 } else {
                   this.updateTxState(queueEntry, 'await final data')
@@ -5080,7 +5081,7 @@ class TransactionQueue {
               } else {
                 this.updateTxState(queueEntry, 'consensing')
               }
-              if (configContext.stateManager.stuckTxQueueFix === false) continue
+              if (configContext.stateManager.stuckTxQueueFix === false) continue // we should not skip this TX
             }
             if (configContext.stateManager.disableTxExpiration === false) {
               this.setTXExpired(queueEntry, currentIndex, 'txAge > timeM3 + confirmSeenExpirationTime + 10s')
@@ -6009,6 +6010,7 @@ class TransactionQueue {
               } else if (queueEntry.receivedBestVote) {
                 vote = queueEntry.receivedBestVote
               } else if (queueEntry.ourVote && configContext.stateManager.stuckTxQueueFix) {
+                // allow node to request missing data if it has an own vote
                 vote = queueEntry.ourVote
               }
               const accountsNotStored = new Set()
