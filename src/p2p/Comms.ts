@@ -856,12 +856,13 @@ export async function sendGossip(
 
 
   let gossipFactor = config.p2p.gossipFactor
-  if(config.p2p.dynamicGossipFactor){
-    gossipFactor = calculateGossipFactor(nodes.length)
-  }
   if (factor > 0) {
     gossipFactor = factor
   }
+  if(config.p2p.dynamicGossipFactor){
+    gossipFactor = calculateGossipFactor(nodes.length)
+  }
+
   let recipientIdxs
   let originNode
   let originIdx
