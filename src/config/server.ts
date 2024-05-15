@@ -308,6 +308,7 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     stuckTxRemoveTime: 1000 * 60 * 2, // 2 minutes
     reinjectChallengedTxs: false,
     maxReinjectChallengedTxs: 5,
+    stuckTxQueueFix: true
   },
   sharding: { nodesPerConsensusGroup: 5, nodesPerEdge: 2, executeInOneShard: false },
   mode: ServerMode.Debug,

@@ -45,7 +45,8 @@ import {
   TxDebug,
   WrappedResponses,
   ArchiverReceipt,
-  NonceQueueItem
+  NonceQueueItem,
+  AppliedVote
 } from './state-manager-types'
 import { isInternalTxAllowed, networkMode } from '../p2p/Modes'
 import { Node } from '@shardus/types/build/src/p2p/NodeListTypes'
@@ -5047,8 +5048,9 @@ class TransactionQueue {
                   //todo only keep on for temporarliy
                   /* prettier-ignore */ nestedCountersInstance.countEvent('txExpired', `> M2 canceled due to upstream TXs. sieveT:${queueEntry.txSieveTime}`)
                   this.setTXExpired(queueEntry, currentIndex, 'm2, processing or awaiting')
+                  if (configContext.stateManager.stuckTxQueueFix) continue
                 }
-                continue
+                if (configContext.stateManager.stuckTxQueueFix === false) continue
               }
             }
           }
@@ -5070,12 +5072,15 @@ class TransactionQueue {
             if (configContext.stateManager.disableTxExpiration && hasSeenVote) {
               nestedCountersInstance.countEvent('txExpired', `> timeM3 + confirmSeenExpirationTime state: ${queueEntry.state} hasSeenVote: ${hasSeenVote} hasSeenConfirmation: ${hasSeenConfirmation} waitForReceiptOnly: ${queueEntry.waitForReceiptOnly}`)
               if(this.config.stateManager.txStateMachineChanges){
-                // this.updateTxState(queueEntry, 'await final data')
-                this.updateTxState(queueEntry, 'consensing')
+                if (configContext.stateManager.stuckTxQueueFix) {
+                  if (queueEntry.state !== 'await final data') this.updateTxState(queueEntry, 'await final data')
+                } else {
+                  this.updateTxState(queueEntry, 'await final data')
+                }
               } else {
                 this.updateTxState(queueEntry, 'consensing')
               }
-              continue
+              if (configContext.stateManager.stuckTxQueueFix === false) continue
             }
             if (configContext.stateManager.disableTxExpiration === false) {
               this.setTXExpired(queueEntry, currentIndex, 'txAge > timeM3 + confirmSeenExpirationTime + 10s')
@@ -5972,7 +5977,7 @@ class TransactionQueue {
               //PURPL-74 todo: get the vote from queueEntry.receivedBestVote or receivedBestConfirmation instead of receipt2
               const receipt2 = this.stateManager.getReceipt2(queueEntry)
               const timeSinceAwaitFinalStart = queueEntry.txDebug.startTimestamp['await final data'] > 0 ? shardusGetTime() - queueEntry.txDebug.startTimestamp['await final data'] : 0
-              let vote
+              let vote: AppliedVote
 
               // first check if this is a challenge receipt
               if (receipt2 && receipt2.confirmOrChallenge.message === 'challenge') {
@@ -6003,6 +6008,8 @@ class TransactionQueue {
                 vote = queueEntry.receivedBestConfirmation.appliedVote
               } else if (queueEntry.receivedBestVote) {
                 vote = queueEntry.receivedBestVote
+              } else if (queueEntry.ourVote && configContext.stateManager.stuckTxQueueFix) {
+                vote = queueEntry.ourVote
               }
               const accountsNotStored = new Set()
               if (vote) {
@@ -7462,6 +7469,7 @@ class TransactionQueue {
     if (this.archivedQueueEntriesByID.has(txId)) delete this.archivedQueueEntriesByID[txId]
   }
   updateTxState(queueEntry: QueueEntry, nextState: string): void {
+    this.mainLogger.debug(`Updating tx ${queueEntry.logID} state from ${queueEntry.state} to ${nextState}`)
     const currentState = queueEntry.state
     this.txDebugMarkEndTime(queueEntry, currentState)
     queueEntry.state = nextState

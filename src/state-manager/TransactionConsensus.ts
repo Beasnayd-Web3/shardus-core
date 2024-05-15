@@ -718,6 +718,7 @@ class TransactionConsenus {
           }
 
           if (receivedAppliedReceipt2 == null || receivedAppliedReceipt2.confirmOrChallenge == null) {
+            /* prettier-ignore */ this.mainLogger.error(`spread_appliedReceipt2 ${txId} received null receipt`)
             nestedCountersInstance.countEvent(`consensus`, `spread_appliedReceipt received null receipt`)
             return
           }
@@ -740,9 +741,7 @@ class TransactionConsenus {
               /* prettier-ignore */
               if (logFlags.error || this.stateManager.consensusLog)
                 this.mainLogger.error(
-                  `spread_appliedReceipt no queue entry for ${txId} dbg:${
-                    this.stateManager.debugTXHistory[utils.stringifyReduce(txId)]
-                  }`
+                  `spread_appliedReceipt no queue entry for ${txId} txId:${txId}`
                 )
               // NEW start repair process that will find the TX then apply repairs
               // this.stateManager.transactionRepair.repairToMatchReceiptWithoutQueueEntry(receivedAppliedReceipt2)
@@ -793,18 +792,28 @@ class TransactionConsenus {
           }
 
           // decide whether we should store and forward the receipt
-          let shouldStoreAndForward = false
+          let shouldStore = false
+          let shouldForward = false
+          if (Context.config.stateManager.stuckTxQueueFix) {
+            // queueEntry.gossipedReceipt will decide the actual forwarding
+            shouldForward = true
+          }
           if (this.config.stateManager.useNewPOQ === false) {
-            shouldStoreAndForward = queueEntry.gossipedReceipt === false
+            shouldStore = queueEntry.gossipedReceipt === false
           } else {
             const localAppliedReceipt2 = queueEntry.appliedReceipt2
             if (localAppliedReceipt2) {
               const localReceiptConfirmNode = localAppliedReceipt2.confirmOrChallenge.nodeId
               const receivedReceiptConfirmNode = receivedAppliedReceipt2.confirmOrChallenge.nodeId
               if (localReceiptConfirmNode === receivedReceiptConfirmNode) {
+                if (Context.config.stateManager.stuckTxQueueFix) {
+                  shouldForward = true
+                } else {
+                  shouldForward = false
+                }
                 if (logFlags.debug)
                   this.mainLogger.debug(
-                    `spread_appliedReceipt2 ${queueEntry.logID} we have the same receipt. We do not need to store and forward`
+                    `spread_appliedReceipt2 ${queueEntry.logID} we have the same receipt. We do not need to store but we will forward`
                   )
               } else {
                 if (logFlags.debug)
@@ -826,14 +835,16 @@ class TransactionConsenus {
                   queueEntry.acceptedTx.timestamp
                 )
                 if (receivedReceiptRank < localReceiptRank) {
-                  shouldStoreAndForward = true
+                  shouldStore = true
+                  shouldForward = true
                   this.mainLogger.debug(
-                    `spread_appliedReceipt2 ${queueEntry.logID} received receipt is better`
+                    `spread_appliedReceipt2 ${queueEntry.logID} received receipt is better. we will store and forward`
                   )
                 }
               }
             } else {
-              shouldStoreAndForward = true
+              shouldStore = true
+              shouldForward = true
               if (logFlags.debug)
                 this.mainLogger.debug(
                   `spread_appliedReceipt2 ${queueEntry.logID} we do not have a local or received receipt generated. will store and forward`
@@ -841,19 +852,20 @@ class TransactionConsenus {
             }
           }
           // if we are tx group node and haven't got data yet, we should store and forward the receipt
-          if (shouldStoreAndForward === false) {
+          if (queueEntry.isInExecutionHome === false) {
             if (queueEntry.accountDataSet === false || Object.keys(queueEntry.collectedFinalData).length === 0) {
-              shouldStoreAndForward = true
+              shouldStore = true
+              shouldForward = true
               if (logFlags.debug)
                 this.mainLogger.debug(
-                  `spread_appliedReceipt2 ${queueEntry.logID} we do not have account data yet. will store and forward`
+                  `spread_appliedReceipt2 ${queueEntry.logID} we are tx group node and do not have receipt2 yet. will store and forward`
                 )
             }
           }
+          this.mainLogger.debug(`spread_appliedReceipt2 ${queueEntry.logID} shouldStore:${shouldStore}, shouldForward:${shouldForward} isInExecutionHome:${queueEntry.isInExecutionHome}, accountDataSet:${queueEntry.accountDataSet}, collectedFinalData:${Object.keys(queueEntry.collectedFinalData).length}`)
 
           // process, store and forward the receipt
-          if (shouldStoreAndForward === true && queueEntry.gossipedReceipt === false) {
-            queueEntry.gossipedReceipt = true
+          if (shouldStore === true && queueEntry.gossipedReceipt === false) {
             /* prettier-ignore */
             if (logFlags.debug || this.stateManager.consensusLog)
               this.mainLogger.debug(
@@ -930,11 +942,12 @@ class TransactionConsenus {
                 gossipGroup,
                 false
               )
+              queueEntry.gossipedReceipt = true
               nestedCountersInstance.countEvent('consensus', 'spread_appliedReceipt2 gossip forwarded')
             }
           } else {
             // we get here if the receipt has already been shared
-            /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`spread_appliedReceipt2 skipped ${queueEntry.logID} receiptNotNull:${receiptNotNull} Already Shared or shouldStoreAndForward:${shouldStoreAndForward}`)
+            /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`spread_appliedReceipt2 skipped ${queueEntry.logID} receiptNotNull:${receiptNotNull} Already Shared or shouldStoreAndForward:${shouldStore}`)
           }
         } catch (ex) {
           this.statemanager_fatal(
@@ -2182,7 +2195,7 @@ class TransactionConsenus {
         queueEntry.acceptVoteMessage = false
         const eligibleToConfirm = queueEntry.eligibleNodeIdsToConfirm.has(Self.id)
         const eligibleToChallenge = true
-        if (this.stateManager.consensusLog) {
+        if (this.stateManager.consensusLog || logFlags.debug) {
           this.mainLogger.info(
             `confirmOrChallenge: ${queueEntry.logID} hasWaitedLongEnough: true. Now we will try to confirm or challenge. eligibleToConfirm: ${eligibleToConfirm}, eligibleToChallenge: ${eligibleToChallenge}`
           )

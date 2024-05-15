@@ -1220,6 +1220,8 @@ export interface ServerConfiguration {
     reinjectChallengedTxs: boolean
     // max number of times a tx can be re-injected
     maxReinjectChallengedTxs: number
+    // fix for stuck txs in the queue
+    stuckTxQueueFix: boolean
   }
   /** Options for sharding calculations */
   sharding?: {
