@@ -484,25 +484,40 @@ const gossipUnjoinRequests: P2P.P2PTypes.GossipHandler<UnjoinRequest, P2P.NodeLi
   sender: P2P.NodeListTypes.Node['id'],
   tracker: string
 ) => {
-  // validate payload structure and ignore gossip outside of Q1 and Q2
-  if (
-    !checkGossipPayload(
-      payload,
-      {
-        publicKey: 's',
-        sign: 'o',
-      },
-      'gossip-unjoin'
-    )
-  ) {
+  // need to accept unjoin requests from any quarter
+  
+  if (!payload) {
+    warn('No payload provided for the `UnjoinRequest` request.')
     return
   }
 
-  //  Verify if sender is original signer . If so check if in Q1 to continue.
-  if (!verifyOriginalSenderAndQuarter(payload, sender, 'gossip-unjoin')) {
+
+  // Validate payload structure and types
+  let err = utils.validateTypes(payload, {
+    publicKey: 's',
+    sign: 'o',
+  })
+
+  if (err) {
+    /* prettier-ignore */ if (logFlags.error) warn(`gossipUnjoinRequests: bad input ${err}`)
     return
   }
 
+  // validate the 'sign' object structure
+  err = utils.validateTypes(payload.sign, {
+    owner: 's',
+    sig: 's',
+  })
+
+  if (err) {
+    /* prettier-ignore */ if (logFlags.error) warn(`gossipUnjoinRequests: bad input sign ${err}`)
+    return
+  }
+
+  const signer = NodeList.byPubKey.get(payload.sign.owner)
+  if (!signer) {
+    /* prettier-ignore */ if (logFlags.error) warn('gossip-unjoin: Got unjoin-request from unknown node')
+  }
   const processResult = processNewUnjoinRequest(payload)
   if (processResult.isErr()) {
     warn(`gossip-unjoin failed to process unjoin request: ${processResult.error}`)
@@ -554,14 +569,9 @@ const gossipSyncStartedRoute: P2P.P2PTypes.GossipHandler<StartedSyncingRequest, 
 
     //  Validate of payload is done in addSyncStarted
     const addSyncStartedResult = addSyncStarted(payload)
-    nestedCountersInstance.countEvent('p2p', `sync-started validation success: ${addSyncStartedResult.success}`)
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-started validation success: ${addSyncStartedResult.success}`)
     /* prettier-ignore */ if (logFlags.verbose) console.log(`sync-started validation success: ${addSyncStartedResult.success}`)
-    if (!addSyncStartedResult.success) {
-      if (addSyncStartedResult.reason !== 'node has already submitted syncStarted request') {
-        if (config.debug.cycleRecordOOSDebugLogs) console.log('DEBUG CR-OOS: STARTED_SYNCING: gossipSyncFinished rejected: ', addSyncStartedResult.reason, ' payload id: ', payload.nodeId, ' payload cycle: ', payload.cycleNumber)
-      }
-      nestedCountersInstance.countEvent('p2p', `sync-started failure reason: ${addSyncStartedResult.reason}`)
-    }
+    /* prettier-ignore */ if (!addSyncStartedResult.success) nestedCountersInstance.countEvent('p2p', `sync-started failure reason: ${addSyncStartedResult.reason}`)
     /* prettier-ignore */ if (logFlags.verbose && !addSyncStartedResult.success) console.log(`sync-started validation reason: ${addSyncStartedResult.reason}`)
     if (addSyncStartedResult.success)
       Comms.sendGossip('gossip-sync-started', payload, tracker, sender, NodeList.byIdOrder, false)
@@ -664,9 +674,9 @@ const gossipStandbyRefresh: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.StandbyRefr
     }
 
     const added = addStandbyRefresh(payload)
-    nestedCountersInstance.countEvent('p2p', `standby-refresh validation success: ${added.success}`)
+    /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `standby-refresh validation success: ${added.success}`)
     /* prettier-ignore */ if (logFlags.verbose) console.log(`standby-refresh validation success: ${added.success}`)
-    if (!added.success) nestedCountersInstance.countEvent('p2p', `standby-refresh failure reason: ${added.reason}`)
+    /* prettier-ignore */ if (!added.success) nestedCountersInstance.countEvent('p2p', `standby-refresh failure reason: ${added.reason}`)
     /* prettier-ignore */ if (logFlags.verbose && !added.success) console.log(`standby-refresh validation reason: ${added.reason}`)
     if (added.success)
       Comms.sendGossip('gossip-standby-refresh', payload, tracker, sender, NodeList.byIdOrder, false)
@@ -674,6 +684,7 @@ const gossipStandbyRefresh: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.StandbyRefr
     profilerInstance.scopedProfileSectionEnd('gossip-standby-refresh')
   }
 }
+
 
 export const routes = {
   external: [cycleMarkerRoute, joinRoute, joinedRoute, joinedV2Route, acceptedRoute, unjoinRoute, standbyRefreshRoute],
