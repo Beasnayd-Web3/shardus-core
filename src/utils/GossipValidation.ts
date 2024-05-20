@@ -41,30 +41,9 @@ export function checkGossipPayload<T extends GossipPayload>(
 
     const isJoinReq = isJoinRequest(payload)
 
-    // Handle the case where the payload is a JoinRequest
-    if (isJoinReq) {
-      // Log debug information if enabled and the payload is a JoinRequest
-      if (config.debug.cycleRecordOOSDebugLogs) {
-        console.log(
-          `DEBUG CR-OOS: ${logContext}-reject: not in Q1 or Q2 currentQuarter: ${
-            CycleCreator.currentQuarter
-          } payload publicKey: ${payload.nodeInfo.publicKey || undefined}`
-        )
-      }
-    }
-    // Handle the case where the payload is not a JoinRequest
-    else if (config.debug.cycleRecordOOSDebugLogs) {
-      console.log(
-        `DEBUG CR-OOS: ${logContext}-reject: not in Q1 or Q2 currentQuarter: ${
-          CycleCreator.currentQuarter
-        } payload id: ${(payload as GossipPayload).nodeId || undefined} payload cycle: ${
-          (payload as GossipPayload).cycleNumber || undefined
-        }`
-      )
-    }
     // Log warnings if error logging is enabled
     if (logFlags.error) {
-      if (isJoinRequest(payload)) {
+      if (isJoinReq) {
         warn(
           `${logContext}-reject: not in Q1 or Q2 currentQuarter: ${
             CycleCreator.currentQuarter
