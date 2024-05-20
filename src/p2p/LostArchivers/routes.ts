@@ -28,7 +28,7 @@ import { deserializeLostArchiverInvestigateReq } from '../../types/LostArchiverI
 import { getStreamWithTypeCheck } from '../../types/Helpers'
 import { TypeIdentifierEnum } from '../../types/enum/TypeIdentifierEnum'
 import { safeStringify } from '../../utils'
-import { checkGossipPayload, verifyOriginalSenderAndQuarter } from '../../utils/GossipValidation'
+import { checkGossipPayload } from '../../utils/GossipValidation'
 
 /** Gossip */
 
@@ -44,12 +44,14 @@ const lostArchiverUpGossip: GossipHandler<SignedObject<ArchiverUpMsg>, Node['id'
   if (config.p2p.enableLostArchiversCycles === false) {
     return
   }
-  // Validate the payload structure and types and check if the node is in Q1 or Q2
+  // Ignore gossip outside of Q1 and Q2 and check if the payload structure is valid
+  // If the sender is the original sender check if in Q1 to accept the request
   if (
     !checkGossipPayload(
       payload,
       { type: 's', downMsg: 'o', refuteMsg: 'o', cycle: 's', sign: 'o' },
-      'lostArchiverUpGossip'
+      'lostArchiverUpGossip',
+      sender
     )
   ) {
     return
@@ -69,10 +71,6 @@ const lostArchiverUpGossip: GossipHandler<SignedObject<ArchiverUpMsg>, Node['id'
     return
   }
 
-  // If original sender then check if in Q1 to continue
-  if (!verifyOriginalSenderAndQuarter(payload, sender, 'lostArchiverUpGossip')) {
-    return
-  }
 
   const upMsg = payload as SignedObject<ArchiverUpMsg>
   const target = upMsg.downMsg.investigateMsg.target
@@ -117,7 +115,8 @@ const lostArchiverDownGossip: GossipHandler<SignedObject<ArchiverDownMsg>, Node[
     !checkGossipPayload(
       payload,
       { type: 's', investigateMsg: 'o', cycle: 's', sign: 'o' },
-      'lostArchiverDownGossip'
+      'lostArchiverDownGossip',
+      sender
     )
   ) {
     return
@@ -133,11 +132,6 @@ const lostArchiverDownGossip: GossipHandler<SignedObject<ArchiverDownMsg>, Node[
   if (error) {
     nestedCountersInstance.countEvent('lostArchivers', `lostArchiverDownGossip invalid payload ${error}`)      
     logging.warn(`lostArchiverDownGossip: invalid payload error: ${error}, payload: ${inspect(payload)}`)
-    return
-  }
-
-  // If original sender then check if in Q1 to continue
-  if (!verifyOriginalSenderAndQuarter(payload, sender, 'lostArchiverDownGossip')) {
     return
   }
 
