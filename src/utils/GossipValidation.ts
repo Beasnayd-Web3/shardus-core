@@ -53,7 +53,7 @@ export function checkGossipPayload<T extends GossipPayload>(
       }
     }
     // Handle the case where the payload is not a JoinRequest
-    else if (!isJoinReq && config.debug.cycleRecordOOSDebugLogs) {
+    else if (config.debug.cycleRecordOOSDebugLogs) {
       console.log(
         `DEBUG CR-OOS: ${logContext}-reject: not in Q1 or Q2 currentQuarter: ${
           CycleCreator.currentQuarter
