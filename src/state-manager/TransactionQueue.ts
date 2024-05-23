@@ -3674,7 +3674,31 @@ class TransactionQueue {
 
     //loop through all the data.  find data in our consensus range
     //oddly old check is storage range???
+
+    //need a list of local, non-global keys
+    //read this data
+    //can also ignore ri accounts
+
+    //sort unique keys 
+
+    //should figure out keys we have sooner!!!
+    //should sort them sooner too
+
+    //what is the smallest key we have? (or largest = our index)
+    
+    //order list of transaction nodes.
+    //use mode to map us in to execution group range.  give all accounts we own 
+      //how do we add in more
+      //offset of first exection group node.
+      //our offset mod 128 
+      //if not in exection group, + the offset
+      //send all data we have can cause overlap?
+        //overlap not likely
+
+
     for (const key of queueEntry.uniqueKeys) {
+
+
 
       let hasKey = false
       // eslint-disable-next-line security/detect-object-injection
@@ -3696,23 +3720,23 @@ class TransactionQueue {
 
 
 
-      let isGlobalKey = false
-      //intercept that we have this data rather than requesting it.
-      if (this.stateManager.accountGlobals.isGlobalAccount(key)) {
-        hasKey = true
-        isGlobalKey = true
-        /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('globalAccountMap', queueEntry.logID, `tellCorrespondingNodes - has`)
-      }
+      // let isGlobalKey = false
+      // //intercept that we have this data rather than requesting it.
+      // if (this.stateManager.accountGlobals.isGlobalAccount(key)) {
+      //   hasKey = true
+      //   isGlobalKey = true
+      //   /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('globalAccountMap', queueEntry.logID, `tellCorrespondingNodes - has`)
+      // }
 
       // log the partition
-      if (hasKey === false) {
-        if (loggedPartition === false) {
-          loggedPartition = true
-          /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false: ${utils.stringifyReduce(homeNode.nodeThatStoreOurParitionFull.map((v) => v.id))}`)
-          /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false: full: ${utils.stringifyReduce(homeNode.nodeThatStoreOurParitionFull)}`)
-        }
-        /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false  key: ${utils.stringifyReduce(key)}`)
-      }
+      // if (hasKey === false) {
+      //   if (loggedPartition === false) {
+      //     loggedPartition = true
+      //     /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false: ${utils.stringifyReduce(homeNode.nodeThatStoreOurParitionFull.map((v) => v.id))}`)
+      //     /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false: full: ${utils.stringifyReduce(homeNode.nodeThatStoreOurParitionFull)}`)
+      //   }
+      //   /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false  key: ${utils.stringifyReduce(key)}`)
+      // }
 
       if (hasKey) {
         // TODO PERF is it possible that this query could be used to update our in memory cache? (this would save us from some slow look ups) later on
@@ -3740,15 +3764,15 @@ class TransactionQueue {
           data = utils.deepCopy(data)
         }
 
-        if (isGlobalKey === false) {
+        // if (isGlobalKey === false) {
           // eslint-disable-next-line security/detect-object-injection
           datas[key] = data
           dataKeysWeHave.push(key)
           dataValuesWeHave.push(data)
-        }
+        // }
 
         // eslint-disable-next-line security/detect-object-injection
-        queueEntry.localKeys[key] = true
+        // queueEntry.localKeys[key] = true
         // add this data to our own queue entry!!
         this.queueEntryAddData(queueEntry, data)
       } else {
@@ -3783,6 +3807,14 @@ class TransactionQueue {
     // just need the execution group center, and each account home partition (that we hold)
     // then we send relative offset to offset 
     // also to stored, but that is a smaller group.
+
+
+    // if our queue entry had a list of Accounts that we should save we can iterate over that. 
+    // (or accounts we have consensus over)
+    // then call simple functions to determin who to send to. 
+    // is there a parametric answer to this question that is trivial in both directions 
+    
+
 
     for (const key of queueEntry.uniqueKeys) {
       // eslint-disable-next-line security/detect-object-injection
