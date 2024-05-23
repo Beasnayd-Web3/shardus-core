@@ -3664,86 +3664,18 @@ class TransactionQueue {
     }
     // Report data to corresponding nodes
     const ourNodeData = this.stateManager.currentCycleShardData.nodeShardData
-    // let correspondingEdgeNodes = []
-    let correspondingAccNodes: Shardus.Node[] = []
-    const dataKeysWeHave = []
-    const dataValuesWeHave = []
-    const datas: { [accountID: string]: Shardus.WrappedResponse } = {}
-    const remoteShardsByKey: { [accountID: string]: StateManagerTypes.shardFunctionTypes.NodeShardData } = {} // shard homenodes that we do not have the data for.
-    let loggedPartition = false
 
-    //loop through all the data.  find data in our consensus range
-    //oddly old check is storage range???
+    //todo majority of this to be refactored into sharable core logic 
 
-    //need a list of local, non-global keys
-    //read this data
-    //can also ignore ri accounts
-
-    //sort unique keys 
-
-    //should figure out keys we have sooner!!!
-    //should sort them sooner too
-
-    //what is the smallest key we have? (or largest = our index)
+    let isGather = true
+    const loadedData = new Map<string, Shardus.WrappedResponse>()
+    //todo get this list setup in enqueue. may already have it
+    const ourKeys =  queueEntry.ourConsenusAccountKeys
     
-    //order list of transaction nodes.
-    //use mode to map us in to execution group range.  give all accounts we own 
-      //how do we add in more
-      //offset of first exection group node.
-      //our offset mod 128 
-      //if not in exection group, + the offset
-      //send all data we have can cause overlap?
-        //overlap not likely
+    //todo majority of this to be refactored into sharable core logic that we will reuse in other corresponding 
+    //tell locations 
 
-
-    for (const key of queueEntry.uniqueKeys) {
-
-
-
-      let hasKey = false
-      // eslint-disable-next-line security/detect-object-injection
-      const homeNode = queueEntry.homeNodes[key]
-
-      // FIND efficient way to see if we have the account 
-
-      // if (homeNode.node.id === ourNodeData.node.id) {
-      //   hasKey = true
-      // } else {
-      //   //perf todo: this seems like a slow calculation, coult improve this
-      //   for (const node of homeNode.nodeThatStoreOurParitionFull) {
-      //     if (node.id === ourNodeData.node.id) {
-      //       hasKey = true
-      //       break
-      //     }
-      //   }
-      // }
-
-
-
-      // let isGlobalKey = false
-      // //intercept that we have this data rather than requesting it.
-      // if (this.stateManager.accountGlobals.isGlobalAccount(key)) {
-      //   hasKey = true
-      //   isGlobalKey = true
-      //   /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('globalAccountMap', queueEntry.logID, `tellCorrespondingNodes - has`)
-      // }
-
-      // log the partition
-      // if (hasKey === false) {
-      //   if (loggedPartition === false) {
-      //     loggedPartition = true
-      //     /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false: ${utils.stringifyReduce(homeNode.nodeThatStoreOurParitionFull.map((v) => v.id))}`)
-      //     /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false: full: ${utils.stringifyReduce(homeNode.nodeThatStoreOurParitionFull)}`)
-      //   }
-      //   /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tellCorrespondingNodes hasKey=false  key: ${utils.stringifyReduce(key)}`)
-      // }
-
-      if (hasKey) {
-        // TODO PERF is it possible that this query could be used to update our in memory cache? (this would save us from some slow look ups) later on
-        //    when checking timestamps.. alternatively maybe there is a away we can note the timestamp with what is returned here in the queueEntry data
-        //    and not have to deal with the cache.
-        // todo old: Detect if our node covers this paritition..  need our partition data
-
+    for (const key of ourKeys) {
         this.profiler.profileSectionStart('process_dapp.getRelevantData')
         this.profiler.scopedProfileSectionStart('process_dapp.getRelevantData')
         /* prettier-ignore */ this.setDebugLastAwaitedCallInner('this.stateManager.transactionQueue.app.getRelevantData')
@@ -3756,197 +3688,91 @@ class TransactionQueue {
         this.profiler.scopedProfileSectionEnd('process_dapp.getRelevantData')
         this.profiler.profileSectionEnd('process_dapp.getRelevantData')
 
-        //only queue this up to share if it is not a global account. global accounts dont need to be shared.
-
         //if this is not freshly created data then we need to make a backup copy of it!!
         //This prevents us from changing data before the commiting phase
         if (data.accountCreated == false) {
           data = utils.deepCopy(data)
         }
-
-        // if (isGlobalKey === false) {
-          // eslint-disable-next-line security/detect-object-injection
-          datas[key] = data
-          dataKeysWeHave.push(key)
-          dataValuesWeHave.push(data)
-        // }
-
-        // eslint-disable-next-line security/detect-object-injection
-        // queueEntry.localKeys[key] = true
-        // add this data to our own queue entry!!
+        //store this
+        loadedData.set(key, data) //is this redundant
         this.queueEntryAddData(queueEntry, data)
-      } else {
-        // eslint-disable-next-line security/detect-object-injection
-        remoteShardsByKey[key] = queueEntry.homeNodes[key]
-      }
     }
+
+    //we never need to share for global modifications/TXs as that is a two step process
     if (queueEntry.globalModification === true) {
       /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('tellCorrespondingNodes', queueEntry.logID, `tellCorrespondingNodes - globalModification = true, not telling other nodes`)
       return
     }
 
     let message: { stateList: Shardus.WrappedResponse[]; txid: string }
-    let edgeNodeIds = []
-    let consensusNodeIds = []
+    if(isGather === true){
+      //make one message with all data and sign it
+    } else {
+      //we wil lhave a mapp of sorted accounts to messages
+      //will get calculated later
+    }
 
-    const nodesToSendTo: StringNodeObjectMap = {}
-    const doOnceNodeAccPair = new Set<string>() //can skip  node+acc if it happens more than once.
+    let indexRanges: {start:number, end:number}[] = []
+    //if split index push two ranges.
+    //if not split push one range
 
-    //double loop fro mhell
+    for(let range of indexRanges){
 
-    // loop through all keys... could use a dynamic smaller list or just work 
-    // from the accoutns we will send?
-    // build up state and forward it..
-    // this data can only come from us!
-    // should not await each send, we dont.
-
-    //for the accounts we have.  end to execution group consensus
-    //
-    // reverse test should be really simiple 
-    // 
-    // just need the execution group center, and each account home partition (that we hold)
-    // then we send relative offset to offset 
-    // also to stored, but that is a smaller group.
-
-
-    // if our queue entry had a list of Accounts that we should save we can iterate over that. 
-    // (or accounts we have consensus over)
-    // then call simple functions to determin who to send to. 
-    // is there a parametric answer to this question that is trivial in both directions 
-    
-
-
-    for (const key of queueEntry.uniqueKeys) {
-      // eslint-disable-next-line security/detect-object-injection
-      if (datas[key] != null) {
-        for (const key2 of queueEntry.uniqueKeys) {
-          if (key !== key2) {
-            // eslint-disable-next-line security/detect-object-injection
-            const localHomeNode = queueEntry.homeNodes[key]
-            // eslint-disable-next-line security/detect-object-injection
-            const remoteHomeNode = queueEntry.homeNodes[key2]
-
-            const ourLocalConsensusIndex = localHomeNode.consensusNodeForOurNodeFull.findIndex(
-              (a) => a.id === ourNodeData.node.id
-            )
-            if (ourLocalConsensusIndex === -1) {
-              continue
+      let startingMatch = ((startTargetIndex + globalOffset) mod ourGroupSize ) + ourIndex
+      let matchStride = ourGroupSize 
+      let targetIndex = startingMatch
+      while( targetIndex <= endTargetIndex ) {
+          if(isGather){
+            //Send all of our facts (message) to targetIndex node
+            targetIndex += ourGroupSize
+          } else {
+            let keysToSend = []
+            for (const key of ourKeys) {
+              //get target node from target index.
+              //check node min/max range vs key.
+              //if covered add it to keys to send
+              keysToSend.push(key)
             }
+            if(keysToSend.length > 0){
+              //do we have this cached, just send
 
-            edgeNodeIds = []
-            consensusNodeIds = []
-            correspondingAccNodes = []
-
-            const ourSendingGroupSize = localHomeNode.consensusNodeForOurNodeFull.length
-
-            const targetConsensusGroupSize = remoteHomeNode.consensusNodeForOurNodeFull.length
-            const targetEdgeGroupSize = remoteHomeNode.edgeNodes.length
-            const pachedListSize = remoteHomeNode.patchedOnNodes.length
-
-            // must add one to each lookup index!
-            const indicies = ShardFunctions.debugFastStableCorrespondingIndicies(
-              ourSendingGroupSize,
-              targetConsensusGroupSize,
-              ourLocalConsensusIndex + 1
-            )
-            const edgeIndicies = ShardFunctions.debugFastStableCorrespondingIndicies(
-              ourSendingGroupSize,
-              targetEdgeGroupSize,
-              ourLocalConsensusIndex + 1
-            )
-
-            let patchIndicies = []
-            if (remoteHomeNode.patchedOnNodes.length > 0) {
-              patchIndicies = ShardFunctions.debugFastStableCorrespondingIndicies(
-                ourSendingGroupSize,
-                remoteHomeNode.patchedOnNodes.length,
-                ourLocalConsensusIndex + 1
-              )
-            }
-
-            // for each remote node lets save it's id
-            for (const index of indicies) {
-              const targetNode = remoteHomeNode.consensusNodeForOurNodeFull[index - 1] // fastStableCorrespondingIndicies is one based so adjust for 0 based array
-              //only send data to the execution group
-              if (queueEntry.executionGroupMap.has(targetNode.id) === false) {
-                continue
+              //else
+              for(let key of keysToSend){
+                //push loaded data 
+                //sign cache , send message
               }
 
-              if (targetNode != null && targetNode.id !== ourNodeData.node.id) {
-                nodesToSendTo[targetNode.id] = targetNode
-                consensusNodeIds.push(targetNode.id)
-              }
-            }
-            for (const index of edgeIndicies) {
-              const targetNode = remoteHomeNode.edgeNodes[index - 1] // fastStableCorrespondingIndicies is one based so adjust for 0 based array
-              if (targetNode != null && targetNode.id !== ourNodeData.node.id) {
-                //only send data to the execution group
-                if (queueEntry.executionGroupMap.has(targetNode.id) === false) {
-                  continue
-                }
-                nodesToSendTo[targetNode.id] = targetNode
-                edgeNodeIds.push(targetNode.id)
-              }
-            }
-
-            for (const index of patchIndicies) {
-              const targetNode = remoteHomeNode.edgeNodes[index - 1] // fastStableCorrespondingIndicies is one based so adjust for 0 based array
-              //only send data to the execution group
-              if (queueEntry.executionGroupMap.has(targetNode.id) === false) {
-                continue
-              }
-              if (targetNode != null && targetNode.id !== ourNodeData.node.id) {
-                nodesToSendTo[targetNode.id] = targetNode
-                //edgeNodeIds.push(targetNode.id)
-              }
-            }
-
-            const dataToSend = []
-            // eslint-disable-next-line security/detect-object-injection
-            dataToSend.push(datas[key]) // only sending just this one key at a time
-            message = { stateList: dataToSend, txid: queueEntry.acceptedTx.txId }
-
-            //build correspondingAccNodes, but filter out nodeid, account key pairs we have seen before
-            for (const [accountID, node] of Object.entries(nodesToSendTo)) {
-              const keyPair = accountID + key
-              if (node != null && doOnceNodeAccPair.has(keyPair) === false) {
-                doOnceNodeAccPair.add(keyPair)
-                correspondingAccNodes.push(node)
-              }
-            }
-
-            /* prettier-ignore */ if (logFlags.verbose) if (logFlags.playback) this.logger.playbackLogNote('tellCorrespondingNodes', queueEntry.logID, `tellCorrespondingNodes nodesToSendTo:${Object.keys(nodesToSendTo).length} doOnceNodeAccPair:${doOnceNodeAccPair.size} indicies:${JSON.stringify(indicies)} edgeIndicies:${JSON.stringify(edgeIndicies)} patchIndicies:${JSON.stringify(patchIndicies)}  doOnceNodeAccPair: ${JSON.stringify([...doOnceNodeAccPair.keys()])} ourLocalConsensusIndex:${ourLocalConsensusIndex} ourSendingGroupSize:${ourSendingGroupSize} targetEdgeGroupSize:${targetEdgeGroupSize} targetEdgeGroupSize:${targetEdgeGroupSize} pachedListSize:${pachedListSize}`)
-
-            if (correspondingAccNodes.length > 0) {
-              const remoteRelation = ShardFunctions.getNodeRelation(
-                remoteHomeNode,
-                this.stateManager.currentCycleShardData.ourNode.id
-              )
-              const localRelation = ShardFunctions.getNodeRelation(
-                localHomeNode,
-                this.stateManager.currentCycleShardData.ourNode.id
-              )
-              /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('shrd_tellCorrespondingNodes', `${queueEntry.acceptedTx.txId}`, `remoteRel: ${remoteRelation} localrel: ${localRelation} qId: ${queueEntry.entryID} AccountBeingShared: ${utils.makeShortHash(key)} EdgeNodes:${utils.stringifyReduce(edgeNodeIds)} ConsesusNodes${utils.stringifyReduce(consensusNodeIds)}`)
-
-              // Filter nodes before we send tell()
-              const filteredNodes = this.stateManager.filterValidNodesForInternalMessage(
-                correspondingAccNodes,
-                'tellCorrespondingNodes',
-                true,
-                true
-              )
-              if (filteredNodes.length === 0) {
-                /* prettier-ignore */ if (logFlags.error) this.mainLogger.error('tellCorrespondingNodes: filterValidNodesForInternalMessage no valid nodes left to try')
-                return null
-              }
-              const filterdCorrespondingAccNodes = filteredNodes
-
-              this.broadcastState(filterdCorrespondingAccNodes, message)
             }
           }
-        }
+
       }
+
+
     }
+
+
+    //send all part:
+    // // Filter nodes before we send tell()
+    // const filteredNodes = this.stateManager.filterValidNodesForInternalMessage(
+    //   correspondingAccNodes,
+    //   'tellCorrespondingNodes',
+    //   true,
+    //   true
+    // )
+    // if (filteredNodes.length === 0) {
+    //   /* prettier-ignore */ if (logFlags.error) this.mainLogger.error('tellCorrespondingNodes: filterValidNodesForInternalMessage no valid nodes left to try')
+    //   return null
+    // }
+    // const filterdCorrespondingAccNodes = filteredNodes
+
+    // this.broadcastState(filterdCorrespondingAccNodes, message)
+  
+  
+  }
+
+  correspondingTellCore(ourKeys:string[], ourIndex:number, ourGroup:string[], targetGroup:string[], isGather:boolean): boolean {
+
+
   }
 
 
