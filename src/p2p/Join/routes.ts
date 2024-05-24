@@ -202,6 +202,7 @@ const unjoinRoute: P2P.P2PTypes.Route<Handler> = {
     }
 
     Comms.sendGossip('gossip-unjoin', joinRequest, '', null, NodeList.byIdOrder, true)
+    return res.status(200).send()
   },
 }
 
