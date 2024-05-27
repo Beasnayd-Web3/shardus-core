@@ -21,7 +21,7 @@ import {
   verifyJoinRequestTypes,
   nodeListFromStates,
 } from '.'
-import { config, crypto } from '../Context'
+import { config } from '../Context'
 import { isBogonIP } from '../../utils/functions/checkIP'
 import { isPortReachable } from '../../utils/isPortReachable'
 import { nestedCountersInstance } from '../../utils/nestedCounters'
@@ -33,8 +33,7 @@ import { addFinishedSyncing } from './v2/syncFinished'
 import { processNewUnjoinRequest, UnjoinRequest } from './v2/unjoin'
 import { isActive } from '../Self'
 import { logFlags } from '../../logger'
-import { SyncStarted, StartedSyncingRequest, JoinRequest } from '@shardus/types/build/src/p2p/JoinTypes'
-import { SignedObject } from '@shardus/types/build/src/p2p/P2PTypes'
+import { StartedSyncingRequest, JoinRequest } from '@shardus/types/build/src/p2p/JoinTypes'
 import { addSyncStarted } from './v2/syncStarted'
 import { addStandbyRefresh } from './v2/standbyRefresh'
 import { Utils } from '@shardus/types'
@@ -444,17 +443,23 @@ const gossipJoinRoute: P2P.P2PTypes.GossipHandler<P2P.JoinTypes.JoinRequest, P2P
  * Part of Join Protocol v2. Gossips all valid join requests.
  */
 const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
-  {
-    joinRequest: P2P.JoinTypes.JoinRequest
-  } & SignedObject,
+{
+  joinRequest: P2P.JoinTypes.JoinRequest,
+  sign: P2P.P2PTypes.Signature
+},
   P2P.NodeListTypes.Node['id']
 > = (
   payload: {
-    joinRequest: P2P.JoinTypes.JoinRequest
-  } & SignedObject,
+    joinRequest: P2P.JoinTypes.JoinRequest,
+    sign: P2P.P2PTypes.Signature
+  },
   sender: P2P.NodeListTypes.Node['id'],
   tracker: string
 ) => {
+  // TODO [] delete this function
+  console.log(`payload: ${JSON.stringify(payload, (key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  )}`)
   // validate payload structure and ignore gossip outside of Q1 and Q2
   // If the sender is the original sender check if in Q1 to accept the request
   if (
@@ -502,7 +507,7 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
     return
   }
 
-  payload.selectionNum = selectionNumResult.value
+  joinRequest.selectionNum = selectionNumResult.value
 
   // add the join request to the global list of join requests. this will also
   // add it to the list of new join requests that will be processed as part of
@@ -641,7 +646,7 @@ const gossipSyncFinishedRoute: P2P.P2PTypes.GossipHandler<
     const addFinishedSyncingResult = addFinishedSyncing(payload)
     /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-finished validation success: ${addFinishedSyncingResult.success}`)
     if (!addFinishedSyncingResult.success) {
-      nestedCountersInstance.countEvent('p2p', `sync-finished failure reason: ${addFinishedSyncingResult.reason}`)
+      /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `sync-finished failure reason: ${addFinishedSyncingResult.reason}`)
     }
     if (addFinishedSyncingResult.success) {
       Comms.sendGossip(

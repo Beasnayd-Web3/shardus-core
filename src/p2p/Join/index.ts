@@ -46,7 +46,7 @@ const clone = rfdc()
 
 let requests: P2P.JoinTypes.JoinRequest[]
 let seen: Set<P2P.P2PTypes.Node['publicKey']>
-let queuedReceivedJoinRequests: P2P.JoinTypes.JoinRequest[] = []
+let queuedReceivedJoinRequests: JoinRequest[] = []
 let queuedJoinRequestsForGossip: JoinRequest[] = []
 let queuedStartedSyncingId: string
 let queuedFinishedSyncingId: string
@@ -711,9 +711,17 @@ export function sendRequests(): void {
         seen.add(joinRequest.nodeInfo.publicKey)
         saveJoinRequest(joinRequest)
       }
+
+      const unsignedObjectWithJoinRequest = {
+        joinRequest: joinRequest,
+        sign: null
+      }
+
+      const signedObjectWithJoinRequest = crypto.sign(unsignedObjectWithJoinRequest)
+      
       Comms.sendGossip(
         'gossip-valid-join-requests',
-        joinRequest,
+        signedObjectWithJoinRequest,
         '',
         null,
         nodeListFromStates([
