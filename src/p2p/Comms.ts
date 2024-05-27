@@ -25,6 +25,7 @@ import { RequestErrorEnum } from '../types/enum/RequestErrorEnum'
 import { getStreamWithTypeCheck, requestErrorHandler } from '../types/Helpers'
 import { TypeIdentifierEnum } from '../types/enum/TypeIdentifierEnum'
 import { InternalError, ResponseError, serializeResponseError } from '../types/ResponseError'
+import { nodeListFromStates } from './Join'
 
 /** ROUTES */
 
@@ -828,7 +829,11 @@ export async function sendGossip(
   payload,
   tracker = '',
   sender = null,
-  inpNodes: Shardus.Node[] | Shardus.NodeWithRank[] = NodeList.byIdOrder, // Joining nodes need gossip too; we don't
+  inpNodes: Shardus.Node[] | Shardus.NodeWithRank[] = nodeListFromStates([
+    P2P.P2PTypes.NodeStatus.ACTIVE,
+    P2P.P2PTypes.NodeStatus.READY,
+    P2P.P2PTypes.NodeStatus.SYNCING,
+  ]), // Joining nodes need gossip too; we don't
   // send to ourself
   isOrigin = false,
   factor = -1,
