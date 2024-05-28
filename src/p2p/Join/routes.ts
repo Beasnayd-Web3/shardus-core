@@ -456,24 +456,14 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   sender: P2P.NodeListTypes.Node['id'],
   tracker: string
 ) => {
-  // TODO [] delete this function
-  console.log(`payload: ${JSON.stringify(payload, (key, value) =>
-    typeof value === 'bigint' ? value.toString() : value
-  )}`)
   // validate payload structure and ignore gossip outside of Q1 and Q2
   // If the sender is the original sender check if in Q1 to accept the request
   if (
     !checkGossipPayload(
       payload,
       {
-        'joinRequest.nodeInfo': 'o',
-        'joinRequest.selectionNum': 's',
-        'joinRequest.cycleMarker': 's',
-        'joinRequest.proofOfWork': 's',
-        'joinRequest.version': 's',
-        'joinRequest.appJoinData': 'o',
-        'joinRequest.sign': 'o',
-        'sign': 'o',
+        joinRequest: 'o',
+        sign: 'o',
       },
       'gossip-ValidJoinRequest',
       sender
