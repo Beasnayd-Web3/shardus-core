@@ -712,12 +712,7 @@ export function sendRequests(): void {
         saveJoinRequest(joinRequest)
       }
 
-      const unsignedObjectWithJoinRequest = {
-        joinRequest: joinRequest,
-        sign: null
-      }
-
-      const signedObjectWithJoinRequest = crypto.sign(unsignedObjectWithJoinRequest)
+      const signedObjectWithJoinRequest = crypto.sign({ joinRequest, sign: null })
       
       Comms.sendGossip(
         'gossip-valid-join-requests',

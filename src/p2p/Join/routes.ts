@@ -33,7 +33,7 @@ import { addFinishedSyncing } from './v2/syncFinished'
 import { processNewUnjoinRequest, UnjoinRequest } from './v2/unjoin'
 import { isActive } from '../Self'
 import { logFlags } from '../../logger'
-import { StartedSyncingRequest, JoinRequest } from '@shardus/types/build/src/p2p/JoinTypes'
+import { JoinRequest, StartedSyncingRequest } from '@shardus/types/build/src/p2p/JoinTypes'
 import { addSyncStarted } from './v2/syncStarted'
 import { addStandbyRefresh } from './v2/standbyRefresh'
 import { Utils } from '@shardus/types'
@@ -473,6 +473,23 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   }
 
   const joinRequest = payload.joinRequest
+
+  // Validate the structure of payload.joinRequest
+  // checkGossipPayload using validateTypes only verifies that joinRequest is an object, not its internal structure.
+  const err = utils.validateTypes(joinRequest, {
+    nodeInfo: 'o',
+    selectionNum: 's',
+    cycleMarker: 's',
+    proofOfWork: 's',
+    version: 's',
+    sign: 'o',
+    appJoinData: 'o',
+  })
+
+  if (err) {
+    warn(`gossipValidJoinRequests: invalid payload.joinRequest: ${err}`)
+    return
+  }
 
   // ensure this join request doesn't already exist in standby nodes
   if (getStandbyNodesInfoMap().has(joinRequest.nodeInfo.publicKey)) {
