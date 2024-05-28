@@ -931,8 +931,6 @@ export function registerRoutes() {
   Comms.registerGossipHandler('joinarchiver', async (payload, sender, tracker) => {
     profilerInstance.scopedProfileSectionStart('joinarchiver')
     try {
-      // Ignore gossip outside of Q1 and Q2
-      // If the sender is the original sender check if in Q1 to accept the request
       if (
         !checkGossipPayload(
           payload,

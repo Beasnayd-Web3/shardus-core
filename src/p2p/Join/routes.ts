@@ -456,8 +456,6 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   sender: P2P.NodeListTypes.Node['id'],
   tracker: string
 ) => {
-  // validate payload structure and ignore gossip outside of Q1 and Q2
-  // If the sender is the original sender check if in Q1 to accept the request
   if (
     !checkGossipPayload(
       payload,
@@ -475,7 +473,7 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   const joinRequest = payload.joinRequest
 
   // Validate the structure of payload.joinRequest
-  // checkGossipPayload using validateTypes only verifies that joinRequest is an object, not its internal structure.
+  // checkGossipPayload using validateTypes does not check its nested joinRequest
   const err = utils.validateTypes(joinRequest, {
     nodeInfo: 'o',
     selectionNum: 's',
@@ -509,7 +507,7 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   // then, calculate the selection number for this join request
   const selectionNumResult = computeSelectionNum(joinRequest)
   if (selectionNumResult.isErr()) {
-    /* prettier-ignore */ nestedCountersInstance.countEvent( 'p2p', `join-gossip-reject:  node already standby` )
+    /* prettier-ignore */ nestedCountersInstance.countEvent( 'p2p', `join-gossip-reject: failed to compute selection number` )
     /* prettier-ignore */ if (logFlags.p2pNonFatal)console.error( `failed to compute selection number for node ${joinRequest.nodeInfo.publicKey}:`, JSON.stringify(selectionNumResult.error) )
     return
   }
@@ -572,8 +570,6 @@ const gossipSyncStartedRoute: P2P.P2PTypes.GossipHandler<
 
   /* prettier-ignore */ if (logFlags.verbose) console.log(`received gossip-sync-started`)
   try {
-    // validate payload structure and ignore gossip outside of Q1 and Q2
-    // If the sender is the original sender check if in Q1 to accept the request
     if (
       !checkGossipPayload(
         payload,
@@ -630,8 +626,6 @@ const gossipSyncFinishedRoute: P2P.P2PTypes.GossipHandler<
   profilerInstance.scopedProfileSectionStart('gossip-sync-finished')
 
   try {
-    // validate payload structure and ignore gossip outside of Q1 and Q2
-    // If the sender is the original sender check if in Q1 to accept the request
     if (
       !checkGossipPayload(
         payload,
@@ -684,8 +678,6 @@ const gossipStandbyRefresh: P2P.P2PTypes.GossipHandler<
   nestedCountersInstance.countEvent('p2p', `received gossip-standby-refresh`)
   /* prettier-ignore */ if (logFlags.verbose) console.log(`received gossip-standby-refresh`)
   try {
-    // validate payload structure and ignore gossip outside of Q1 and Q2
-    //  If original sender check if in Q1 to continue.
     if (
       !checkGossipPayload(
         payload,

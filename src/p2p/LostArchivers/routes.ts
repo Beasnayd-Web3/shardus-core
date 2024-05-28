@@ -44,7 +44,6 @@ const lostArchiverUpGossip: GossipHandler<SignedObject<ArchiverUpMsg>, Node['id'
   if (config.p2p.enableLostArchiversCycles === false) {
     return
   }
-  // Validate the payload structure and types and check if the node is in Q1 or Q2
   if (
     !checkGossipPayload(
       payload,
@@ -108,7 +107,6 @@ const lostArchiverDownGossip: GossipHandler<SignedObject<ArchiverDownMsg>, Node[
     return
   }
 
-  // Ignore gossip outside of Q1 and Q2, plus check the payload structure and types
   if (
     !checkGossipPayload(
       payload,

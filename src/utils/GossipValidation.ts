@@ -17,7 +17,14 @@ interface GossipPayload {
   cycleNumber?: number
 }
 
-// Validate the payload of a gossip message that contains a sign object and check if the node is in Q1 or Q2
+/**
+ * Validate payload structure; ignore gossip not in Q1 or Q2; if original sender, only accept in Q1.
+ * @param payload - The gossip payload to validate.
+ * @param validationSchema - The schema against which to validate the payload.
+ * @param logContext - Contextual log information.
+ * @param sender - The sender of the gossip.
+ * @returns {boolean} - True if the payload is valid, false otherwise.
+ */
 export function checkGossipPayload<T extends GossipPayload>(
   payload: T | JoinRequest,
   validationSchema: Record<string, string>,
