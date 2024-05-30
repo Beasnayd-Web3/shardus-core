@@ -21,7 +21,7 @@ prepare-job:
   script:
     - node -v
     - apt-get update
-    - npm ci  #install Node.js dependencies
+    - npm ci #install Node.js dependencies
 
 # Common configuration for jobs
 .common-job-template: &common-job-template
@@ -42,7 +42,7 @@ prepare-job:
 build-job:
   <<: *common-job-template
   stage: build_and_lint_and_check
-  needs: ['prepare-job']  
+  needs: ['prepare-job']
   script:
     - echo "Compiling the code..."
     - npm run prepare

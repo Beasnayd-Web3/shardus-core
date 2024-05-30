@@ -39,10 +39,12 @@ class NestedCounters {
       if (req.headers.accept === 'application/json') {
         // Send JSON response
         res.setHeader('Content-Type', 'application/json')
-        res.send(utils.safeStringify({
-          timestamp: shardusGetTime(),
-          report: arrayReport,
-        }))
+        res.send(
+          utils.safeStringify({
+            timestamp: shardusGetTime(),
+            report: arrayReport,
+          })
+        )
       } else {
         // TODO: This doesn't return the counts to the caller
         res.write(`Counts at time: ${shardusGetTime()} offset: ${getNetworkTimeOffset()}\n`)

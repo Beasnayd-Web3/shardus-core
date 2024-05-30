@@ -111,10 +111,11 @@ export function init() {
           if (stopped) {
             const msg = 'checkNetworkStopped: Network has stopped. Initiating apoptosis'
             /* prettier-ignore */ if (logFlags.important_as_fatal) info(msg)
-            this.fatalLogger.fatal(
-              'checkNetworkStopped: Network has stopped. Initiating apoptosis'
+            this.fatalLogger.fatal('checkNetworkStopped: Network has stopped. Initiating apoptosis')
+            nestedCountersInstance.countEvent(
+              'checkNetworkStopped',
+              `Network has stopped: apop self. ${shardusGetTime()}`
             )
-            nestedCountersInstance.countEvent('checkNetworkStopped', `Network has stopped: apop self. ${shardusGetTime()}`)
             apoptosizeSelf(msg)
           }
         })
@@ -1081,9 +1082,9 @@ export function registerRoutes() {
     res.send(safeStringify({ archivers }))
   })
 
-  network.registerExternalGet('joinedArchiver/:publicKey', ({params: {publicKey}}, res) => {
+  network.registerExternalGet('joinedArchiver/:publicKey', ({ params: { publicKey } }, res) => {
     const isJoined = archivers.has(publicKey)
-    res.json({ isJoined });
+    res.json({ isJoined })
   })
 
   network.registerExternalGet('datarecipients', (req, res) => {

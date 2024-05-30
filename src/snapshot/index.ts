@@ -575,8 +575,8 @@ export async function startWitnessMode() {
         // send offer to each syncing + active nodes unless data is already offered
         for (let i = 0; i < nodeList.length; i++) {
           const node = nodeList[i]
-          const ip = 'ip' in node && node.ip || node.externalIp
-          const port = 'port' in node && node.port || node.externalIp
+          const ip = ('ip' in node && node.ip) || node.externalIp
+          const port = ('port' in node && node.port) || node.externalIp
           if (!alreadyOfferedNodes.has(node.id)) {
             try {
               log(`Sending witness offer to new node ${ip}:${port}`)
@@ -755,10 +755,12 @@ function registerSnapshotRoutes() {
       if (!safetySyncing || !safetyModeVals.networkStateHash) {
         if (!safetySyncing) log('We are not doing data exchange yet. Try agian later')
         if (!safetyModeVals.networkStateHash) log('We have empty network state hash. Try agian later')
-        return res.send(safeStringify({
-          answer: P2P.SnapshotTypes.offerResponse.tryLater,
-          waitTime: Context.config.p2p.cycleDuration * 1000 * 0.5,
-        }))
+        return res.send(
+          safeStringify({
+            answer: P2P.SnapshotTypes.offerResponse.tryLater,
+            waitTime: Context.config.p2p.cycleDuration * 1000 * 0.5,
+          })
+        )
       }
       if (offerRequest.networkStateHash === safetyModeVals.networkStateHash) {
         // ask witnessing node to try offering data later
@@ -773,11 +775,13 @@ function registerSnapshotRoutes() {
           }
         }
         if (neededPartitonIds.length > 0) {
-          return res.send(safeStringify({
-            answer: P2P.SnapshotTypes.offerResponse.needed,
-            partitions: neededPartitonIds,
-            hashes: neededHashes,
-          }))
+          return res.send(
+            safeStringify({
+              answer: P2P.SnapshotTypes.offerResponse.needed,
+              partitions: neededPartitonIds,
+              hashes: neededHashes,
+            })
+          )
         }
       }
       return res.send(safeStringify({ answer: P2P.SnapshotTypes.offerResponse.notNeeded }))

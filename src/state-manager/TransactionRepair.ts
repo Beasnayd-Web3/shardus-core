@@ -13,8 +13,14 @@ import StateManager from '.'
 import { nestedCountersInstance } from '../utils/nestedCounters'
 import { QueueEntry, AppliedVote, AccountHashCache, RequestStateForTxResp } from './state-manager-types'
 import { Logger as log4jsLogger } from 'log4js'
-import { RequestStateForTxPostReq, serializeRequestStateForTxPostReq } from '../types/RequestStateForTxPostReq'
-import { RequestStateForTxPostResp, deserializeRequestStateForTxPostResp } from '../types/RequestStateForTxPostResp'
+import {
+  RequestStateForTxPostReq,
+  serializeRequestStateForTxPostReq,
+} from '../types/RequestStateForTxPostReq'
+import {
+  RequestStateForTxPostResp,
+  deserializeRequestStateForTxPostResp,
+} from '../types/RequestStateForTxPostResp'
 import { InternalRouteEnum } from '../types/enum/InternalRouteEnum'
 import * as NodeList from '../p2p/NodeList'
 import * as Self from '../p2p/Self'
@@ -145,19 +151,19 @@ class TransactionRepair {
       } = {}
 
       const receivedReceipt = queueEntry?.appliedReceiptForRepair2
-      if(!receivedReceipt) {
+      if (!receivedReceipt) {
         nestedCountersInstance.countEvent('repair1', 'receivedReceipt is falsy')
         return
       }
       if (receivedReceipt.result === false) {
         nestedCountersInstance.countEvent('repair1', 'receivedReceipt.result is false')
-        /* prettier-ignore */  if (logFlags.debug) this.mainLogger.debug(`receivedReceipt.result is false for queueEntry: ${JSON.stringify(queueEntry)}`)
+        /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`receivedReceipt.result is false for queueEntry: ${JSON.stringify(queueEntry)}`)
         return
       }
       const appliedVote = queueEntry?.appliedReceiptForRepair2?.appliedVote
-      if(!appliedVote) {
+      if (!appliedVote) {
         nestedCountersInstance.countEvent('repair1', 'appliedVote is falsy')
-        /* prettier-ignore */  if (logFlags.debug) this.mainLogger.debug(`appliedVote is undefined for queueEntry: ${JSON.stringify(queueEntry)}`)
+        /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`appliedVote is undefined for queueEntry: ${JSON.stringify(queueEntry)}`)
         return
       }
 
@@ -316,7 +322,11 @@ class TransactionRepair {
         const eligibleNodeIdsArray = Object.keys(eligibleNodeIdMap)
         utils.shuffleArray(eligibleNodeIdsArray)
         const eligibleNodeIds = new Set(eligibleNodeIdsArray)
-        this.mainLogger.debug(`repairToMatchReceipt: ${txLogID} eligibleNodeIds ${eligibleNodeIds.size} && eligibleNodeIdMap ${Object.keys(eligibleNodeIdMap).length}`)
+        this.mainLogger.debug(
+          `repairToMatchReceipt: ${txLogID} eligibleNodeIds ${eligibleNodeIds.size} && eligibleNodeIdMap ${
+            Object.keys(eligibleNodeIdMap).length
+          }`
+        )
 
         nestedCountersInstance.countEvent('repair1', `eligibleNodeIds: ${eligibleNodeIds.size}`)
 
@@ -412,7 +422,11 @@ class TransactionRepair {
                 nodeShardInfo,
                 alternates: [],
               }
-              this.mainLogger.debug(`repairToMatchReceipt: ${txLogID} node_id ${node_id} is selected as source node. ${utils.stringifyReduce(receivedReceipt)}`)
+              this.mainLogger.debug(
+                `repairToMatchReceipt: ${txLogID} node_id ${node_id} is selected as source node. ${utils.stringifyReduce(
+                  receivedReceipt
+                )}`
+              )
               /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('shrd_repairToMatchReceipt_note', `${txLogID}`, `setting key ${utils.stringifyReduce(key)} ${utils.stringifyReduce(objectToSet)}  acc:${shortKey}`)
               // eslint-disable-next-line security/detect-object-injection
               requestObjects[key] = objectToSet
@@ -573,7 +587,12 @@ class TransactionRepair {
                   this.config.p2p.requestStateForTxPostBinary
                 ) {
                   const request = message as RequestStateForTxPostReq
-                  if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_state_for_tx_post'}`)
+                  if (logFlags.seqdiagram)
+                    this.seqLogger.info(
+                      `0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(
+                        Self.id
+                      )}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_state_for_tx_post'}`
+                    )
                   // GOLD-65 This only has a try /finally.  repairToMatchReceipt is called in several places so it is better hanlde the error here
                   result = await this.p2p.askBinary<RequestStateForTxPostReq, RequestStateForTxPostResp>(
                     node,
@@ -867,7 +886,7 @@ class TransactionRepair {
                 if (this.config.p2p.experimentalSnapshot)
                   if (logFlags.verbose)
                     console.log('repair commit', queueEntry.acceptedTx.txId, queueEntry.acceptedTx.timestamp)
-                  this.stateManager.transactionQueue.addReceiptToForward(queueEntry, 'repair')
+                this.stateManager.transactionQueue.addReceiptToForward(queueEntry, 'repair')
               }
           }
         }

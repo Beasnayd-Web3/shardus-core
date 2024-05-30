@@ -1,0 +1,9 @@
+#Ignore build files
+build/
+dist/
+
+#Ignore test folder
+test/
+
+#IDE
+.vscode/
