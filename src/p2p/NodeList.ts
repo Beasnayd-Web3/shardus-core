@@ -14,8 +14,8 @@ import { logFlags } from '../logger'
 import { nestedCountersInstance } from '..'
 import { shardusGetTime } from '../network'
 import { safeStringify } from '../utils'
-import { getStandbyNodesInfoMap, standbyNodesInfo } from "./Join/v2";
-import { getDesiredCount } from "./CycleAutoScale";
+import { getStandbyNodesInfoMap, standbyNodesInfo } from './Join/v2'
+import { getDesiredCount } from './CycleAutoScale'
 
 const clone = rfdc()
 
@@ -133,14 +133,14 @@ export function addNode(node: P2P.NodeListTypes.Node, caller: string) {
   // If node is READY status, insert sorted by readyTimestamp and id to tiebreak into readyByTimeAndIdOrder
   if (node.status === P2P.P2PTypes.NodeStatus.READY) {
     insertSorted(readyByTimeAndIdOrder, node, propComparator2('readyTimestamp', 'id'))
-  }  
+  }
 
   // If active, insert sorted by id into activeByIdOrder
   if (node.status === P2P.P2PTypes.NodeStatus.ACTIVE) {
     insertSorted(activeByIdOrder, node, propComparator('id'))
     for (let i = 0; i < activeByIdOrder.length; i++) {
       activeIdToPartition.set(activeByIdOrder[i].id, i)
-    }    
+    }
 
     // Dont insert yourself into activeOthersByIdOrder
     if (node.id !== id) {

@@ -167,23 +167,23 @@ Then run buildNetworkStateHash(cycle) again but this time it will be solving for
 
 ```ts
 interface HashVote {
-  radix: string;
-  hash: string;
-  numVotes: number;
+  radix: string
+  hash: string
+  numVotes: number
 }
 
 interface StateHashLevelData {
-  hashTrieSyncConsensus: HashTrieSyncConsensus;
-  participatingNodeIndices: number[];
-  hashesToShare: HashVote[];
+  hashTrieSyncConsensus: HashTrieSyncConsensus
+  participatingNodeIndices: number[]
+  hashesToShare: HashVote[]
 }
 
 interface StateHashData {
-  cycle: number;
-  stateHashStartLayer: number;
-  stateHashCurrentLayer: number;
-  stateHashDataByLevel: Map<number, StateHashLevelData>;
-  upperShardTrie: ShardedHashTrie;
+  cycle: number
+  stateHashStartLayer: number
+  stateHashCurrentLayer: number
+  stateHashDataByLevel: Map<number, StateHashLevelData>
+  upperShardTrie: ShardedHashTrie
 }
 
 interface ShardedHashTrie {

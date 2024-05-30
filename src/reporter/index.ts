@@ -362,7 +362,7 @@ class Reporter {
         shardusVersion: packageJson.version,
         appData,
         archiverListHash,
-        lastInSyncResult
+        lastInSyncResult,
       })
       if (this.stateManager != null && config.mode === 'debug' && !config.debug.disableTxCoverageReport) {
         this.stateManager.transactionQueue.resetTxCoverageMap()

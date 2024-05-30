@@ -97,7 +97,8 @@ class Debug {
     })
     this.network.registerExternalGet('debug-network-delay', isDebugModeMiddleware, (req, res) => {
       try {
-        const delay = req.query.delay && typeof req.query.delay === "string" ? parseInt(req.query.delay) : 120 * 1000
+        const delay =
+          req.query.delay && typeof req.query.delay === 'string' ? parseInt(req.query.delay) : 120 * 1000
         this.network.setDebugNetworkDelay(delay)
       } catch (e) {
         return res.send({ success: false, error: e.message })
@@ -106,7 +107,10 @@ class Debug {
     })
     this.network.registerExternalGet('debug-forcedExpiration', isDebugModeMiddleware, (req, res) => {
       try {
-        const forcedExpiration = req.query.forcedExpiration && typeof req.query.forcedExpiration === "string" ? req.query.forcedExpiration === 'true' : false
+        const forcedExpiration =
+          req.query.forcedExpiration && typeof req.query.forcedExpiration === 'string'
+            ? req.query.forcedExpiration === 'true'
+            : false
         Context.config.debug.forcedExpiration = forcedExpiration
         nestedCountersInstance.countEvent('debug', `forcedExpiration set to ${forcedExpiration}`)
       } catch (e) {

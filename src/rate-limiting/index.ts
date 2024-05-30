@@ -62,7 +62,7 @@ class RateLimiting {
     }
     let overloaded = Math.random() < throttle
 
-    if(overloaded){
+    if (overloaded) {
       nestedCountersInstance.countEvent('loadRelated', 'txRejected:' + loadType)
     }
 

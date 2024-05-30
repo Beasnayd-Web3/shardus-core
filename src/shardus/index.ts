@@ -40,10 +40,10 @@ import * as Wrapper from '../p2p/Wrapper'
 import RateLimiting from '../rate-limiting'
 import Reporter from '../reporter'
 import * as ShardusTypes from '../shardus/shardus-types'
-import { AppObjEnum, DevSecurityLevel, WrappedData } from "../shardus/shardus-types";
+import { AppObjEnum, DevSecurityLevel, WrappedData } from '../shardus/shardus-types'
 import * as Snapshot from '../snapshot'
 import StateManager from '../state-manager'
-import { CachedAppData, NonceQueueItem, QueueCountsResult } from "../state-manager/state-manager-types";
+import { CachedAppData, NonceQueueItem, QueueCountsResult } from '../state-manager/state-manager-types'
 import { DebugComplete } from '../state-manager/TransactionQueue'
 import Statistics from '../statistics'
 import Storage from '../storage'
@@ -82,7 +82,6 @@ import { safeStringify } from '../utils'
 import { isNodeInRotationBounds } from '../p2p/Utils'
 import ShardFunctions from '../state-manager/shardFunctions'
 import SocketIO from 'socket.io'
-
 
 // the following can be removed now since we are not using the old p2p code
 //const P2P = require('../p2p')
@@ -702,10 +701,7 @@ class Shardus extends EventEmitter {
         )
       } catch (err) {
         console.log()
-        this.fatalLogger.fatal(
-          'restore-failed with Error: ' +
-          utils.formatErrorMessage(err)
-        )
+        this.fatalLogger.fatal('restore-failed with Error: ' + utils.formatErrorMessage(err))
         nestedCountersInstance.countEvent('restore', `restore event: fail and apop self. ${shardusGetTime()}`)
         apoptosizeSelf(`restore-failed: ${err?.message}`)
         return
@@ -993,54 +989,59 @@ class Shardus extends EventEmitter {
     }
   }
 
-  async _timestampAndQueueTransaction(tx: ShardusTypes.OpaqueTransaction, appData: any, global = false, noConsensus = false) {
-    const injectedTimestamp = this.app.getTimestampFromTransaction(tx, appData);
+  async _timestampAndQueueTransaction(
+    tx: ShardusTypes.OpaqueTransaction,
+    appData: any,
+    global = false,
+    noConsensus = false
+  ) {
+    const injectedTimestamp = this.app.getTimestampFromTransaction(tx, appData)
 
-    const txId = this.app.calculateTxId(tx);
-    let timestampReceipt: ShardusTypes.TimestampReceipt;
+    const txId = this.app.calculateTxId(tx)
+    let timestampReceipt: ShardusTypes.TimestampReceipt
     if (!injectedTimestamp || injectedTimestamp === -1) {
       if (injectedTimestamp === -1) {
         /* prettier-ignore */
         if (logFlags.p2pNonFatal && logFlags.console) console.log("Dapp request to generate a new timestmap for the tx");
       }
-      timestampReceipt = await this.stateManager.transactionConsensus.askTxnTimestampFromNode(txId);
+      timestampReceipt = await this.stateManager.transactionConsensus.askTxnTimestampFromNode(txId)
       /* prettier-ignore */
       if (logFlags.p2pNonFatal && logFlags.console) console.log("Network generated a" +
         " timestamp", txId, timestampReceipt);
     }
     if (!injectedTimestamp && !timestampReceipt) {
       this.shardus_fatal(
-        "put_noTimestamp",
+        'put_noTimestamp',
         `Transaction timestamp cannot be determined ${utils.stringifyReduce(tx)} `
-      );
-      this.statistics.incrementCounter("txRejected");
-      nestedCountersInstance.countEvent("rejected", "_timestampNotDetermined");
+      )
+      this.statistics.incrementCounter('txRejected')
+      nestedCountersInstance.countEvent('rejected', '_timestampNotDetermined')
       return {
         success: false,
-        reason: "Transaction timestamp cannot be determined.",
-        status: 500
-      };
+        reason: 'Transaction timestamp cannot be determined.',
+        status: 500,
+      }
     }
     let timestampedTx: ShardusTypes.TimestampedTx
     if (timestampReceipt && timestampReceipt.timestamp) {
       timestampedTx = {
         tx,
-        timestampReceipt
-      };
+        timestampReceipt,
+      }
     } else {
-      timestampedTx = { tx };
+      timestampedTx = { tx }
     }
 
     // Perform fast validation of the transaction fields
-    const validateResult = this.app.validate(timestampedTx, appData);
+    const validateResult = this.app.validate(timestampedTx, appData)
     if (validateResult.success === false) {
       // 400 is a code for bad tx or client faulty
-      validateResult.status = validateResult.status ? validateResult.status : 400;
-      return validateResult;
+      validateResult.status = validateResult.status ? validateResult.status : 400
+      return validateResult
     }
 
     // Ask App to crack open tx and return timestamp, id (hash), and keys
-    const { timestamp, id, keys, shardusMemoryPatterns } = this.app.crack(timestampedTx, appData);
+    const { timestamp, id, keys, shardusMemoryPatterns } = this.app.crack(timestampedTx, appData)
     // console.log('app.crack results', timestamp, id, keys)
 
     // Validate the transaction's sourceKeys & targetKeys
@@ -1048,27 +1049,27 @@ class Shardus extends EventEmitter {
       this.shardus_fatal(
         `put_invalidAddress`,
         `Invalid Shardus Address found: allKeys:${keys.allKeys} ${utils.stringifyReduce(tx)}`
-      );
-      this.statistics.incrementCounter("txRejected");
-      nestedCountersInstance.countEvent("rejected", "_hasInvalidShardusAddresses");
-      return { success: false, reason: "Invalid Shardus Addresses", status: 400 };
+      )
+      this.statistics.incrementCounter('txRejected')
+      nestedCountersInstance.countEvent('rejected', '_hasInvalidShardusAddresses')
+      return { success: false, reason: 'Invalid Shardus Addresses', status: 400 }
     }
     // Validate the transaction timestamp
-    let txExpireTimeMs = this.config.transactionExpireTime * 1000;
+    let txExpireTimeMs = this.config.transactionExpireTime * 1000
 
     if (global) {
-      txExpireTimeMs = 2 * 10 * 1000; //todo consider if this should be a config.
+      txExpireTimeMs = 2 * 10 * 1000 //todo consider if this should be a config.
     }
 
     if (inRangeOfCurrentTime(timestamp, txExpireTimeMs, txExpireTimeMs) === false) {
       /* prettier-ignore */
       this.shardus_fatal(`tx_outofrange`, `Transaction timestamp out of range: timestamp:${timestamp} now:${shardusGetTime()} diff(now-ts):${shardusGetTime() - timestamp}  ${utils.stringifyReduce(tx)} our offset: ${getNetworkTimeOffset()} `);
-      this.statistics.incrementCounter("txRejected");
-      nestedCountersInstance.countEvent("rejected", "transaction timestamp out of range");
-      return { success: false, reason: "Transaction timestamp out of range", status: 400 };
+      this.statistics.incrementCounter('txRejected')
+      nestedCountersInstance.countEvent('rejected', 'transaction timestamp out of range')
+      return { success: false, reason: 'Transaction timestamp out of range', status: 400 }
     }
 
-    this.profiler.profileSectionStart("put");
+    this.profiler.profileSectionStart('put')
 
     //as ShardusMemoryPatternsInput
     // Pack into acceptedTx, and pass to StateManager
@@ -1078,35 +1079,35 @@ class Shardus extends EventEmitter {
       keys,
       data: timestampedTx,
       appData,
-      shardusMemoryPatterns: shardusMemoryPatterns
-    };
-    if (logFlags.verbose) this.mainLogger.debug("Transaction validated");
+      shardusMemoryPatterns: shardusMemoryPatterns,
+    }
+    if (logFlags.verbose) this.mainLogger.debug('Transaction validated')
     if (global === false) {
       //temp way to make global modifying TXs not over count
-      this.statistics.incrementCounter("txInjected");
+      this.statistics.incrementCounter('txInjected')
     }
     this.logger.playbackLogNote(
-      "tx_injected",
+      'tx_injected',
       `${txId}`,
       `Transaction: ${utils.stringifyReduce(timestampedTx)}`
-    );
+    )
     let added = this.stateManager.transactionQueue.routeAndQueueAcceptedTransaction(
       acceptedTX,
       /*send gossip*/ true,
       null,
       global,
       noConsensus
-    );
+    )
     if (logFlags.verbose) {
-      this.mainLogger.debug(`End of injectTransaction ${utils.stringifyReduce(tx)}, added: ${added}`);
+      this.mainLogger.debug(`End of injectTransaction ${utils.stringifyReduce(tx)}, added: ${added}`)
     }
 
     return {
       success: true,
-      reason: "Transaction queued, poll for results.",
+      reason: 'Transaction queued, poll for results.',
       status: 200, // 200 status code means transaction is generally successful
-      txId
-    };
+      txId,
+    }
   }
 
   /**
@@ -1191,11 +1192,11 @@ class Shardus extends EventEmitter {
         await this.stateManager.accountSync.initialSyncMain(3)
         console.log('syncAppData - initialSyncMain finished')
       } catch (err) {
-        this.fatalLogger.fatal(
-          'initialSyncMain-failed with Error: ' +
-          utils.formatErrorMessage(err)
+        this.fatalLogger.fatal('initialSyncMain-failed with Error: ' + utils.formatErrorMessage(err))
+        nestedCountersInstance.countEvent(
+          'syncAppData',
+          `initialSyncMain event: fail and apop self. ${shardusGetTime()}`
         )
-        nestedCountersInstance.countEvent('syncAppData', `initialSyncMain event: fail and apop self. ${shardusGetTime()}`)
         apoptosizeSelf(`initialSyncMain-failed: ${err?.message}`)
         return
       }
@@ -1252,7 +1253,12 @@ class Shardus extends EventEmitter {
       }
       readyPayload = Context.crypto.sign(readyPayload)
       Comms.sendGossip('gossip-sync-finished', readyPayload)
-      if (config.debug.cycleRecordOOSDebugLogs) console.log(`DEBUG CR-OOS: inital gossip send. id: ${Self.id}. tInC: ${shardusGetTime() - CycleCreator?.currentStart}`)
+      if (config.debug.cycleRecordOOSDebugLogs)
+        console.log(
+          `DEBUG CR-OOS: inital gossip send. id: ${Self.id}. tInC: ${
+            shardusGetTime() - CycleCreator?.currentStart
+          }`
+        )
       console.log('syncAppData - gossip-sync-finished')
       this.stateManager.appFinishedSyncing = true
     }
@@ -1322,10 +1328,14 @@ class Shardus extends EventEmitter {
     set = false,
     global = false,
     inputAppData = null
-  ): Promise<{ success: boolean; reason: string; status: number, txId?: string }> {
+  ): Promise<{ success: boolean; reason: string; status: number; txId?: string }> {
     const noConsensus = set || global
-    const txId = this.app.calculateTxId(tx);
-    this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: inject:${shardusGetTime()}`)
+    const txId = this.app.calculateTxId(tx)
+    this.seqLogger.info(
+      `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+        Self.id
+      )}: inject:${shardusGetTime()}`
+    )
 
     // Check if Consensor is ready to receive txs before processing it further
     if (!this.appProvided)
@@ -1375,7 +1385,11 @@ class Shardus extends EventEmitter {
       }
     }
     if (this.rateLimiting.isOverloaded()) {
-      this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: reject_overload`)
+      this.seqLogger.info(
+        `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+          Self.id
+        )}: reject_overload`
+      )
       this.statistics.incrementCounter('txRejected')
       nestedCountersInstance.countEvent('rejected', 'isOverloaded')
       return { success: false, reason: 'Maximum load exceeded.', status: 500 }
@@ -1405,92 +1419,132 @@ class Shardus extends EventEmitter {
         }
       }
 
-      const senderAddress = this.app.getTxSenderAddress(tx);
-      this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: sender:${senderAddress}`)
+      const senderAddress = this.app.getTxSenderAddress(tx)
+      this.seqLogger.info(
+        `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+          Self.id
+        )}: sender:${senderAddress}`
+      )
       // Forward transaction to a node that has the account data locally if we don't have it
       if (global === false) {
         if (senderAddress == null) {
           return {
             success: false,
             reason: `Sender address is not available.`,
-            status: 500
-          };
+            status: 500,
+          }
         }
         const consensusGroup = this.getConsenusGroupForAccount(senderAddress)
         const isConsensusNode = consensusGroup.some((node) => node.id === Self.id)
 
-        if(Context.config.stateManager.forwardToLuckyNodes) {
+        if (Context.config.stateManager.forwardToLuckyNodes) {
           if (isConsensusNode === false) {
             // send transaction to lucky consensus group node
-            const result = await this.forwardTransactionToLuckyNodes(senderAddress, tx, 'non-consensus to consensus', '1')
-            return result as Promise<{ success: boolean; reason: string; status: number, txId?: string }>;
+            const result = await this.forwardTransactionToLuckyNodes(
+              senderAddress,
+              tx,
+              'non-consensus to consensus',
+              '1'
+            )
+            return result as Promise<{ success: boolean; reason: string; status: number; txId?: string }>
           }
           // careful we may be consensus node but if we are not lucky we should forward to lucky nodes
-          let luckyNodeIds = this.getClosestNodes(senderAddress, Context.config.stateManager.numberOfReInjectNodes, false)
+          let luckyNodeIds = this.getClosestNodes(
+            senderAddress,
+            Context.config.stateManager.numberOfReInjectNodes,
+            false
+          )
           let isLuckyNode = luckyNodeIds.some((nodeId) => nodeId === Self.id)
           if (isLuckyNode === false) {
-            const result = await this.forwardTransactionToLuckyNodes(senderAddress, tx, 'non-lucky consensus to lucky' +
-              ' consensus', '2')
-            return result as Promise<{ success: boolean; reason: string; status: number, txId?: string }>;
+            const result = await this.forwardTransactionToLuckyNodes(
+              senderAddress,
+              tx,
+              'non-lucky consensus to lucky' + ' consensus',
+              '2'
+            )
+            return result as Promise<{ success: boolean; reason: string; status: number; txId?: string }>
           }
         }
       }
 
-      // we are consensus lucky node for this tx      
-      let shouldAddToNonceQueue = false;
-      let txNonce;
+      // we are consensus lucky node for this tx
+      let shouldAddToNonceQueue = false
+      let txNonce
       if (internalTx === false) {
-        let senderAccountNonce = await this.app.getAccountNonce(senderAddress);
-        txNonce = await this.app.getNonceFromTx(tx);
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: sNonce:${senderAccountNonce}`)
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: txNonce:${txNonce}`)
+        let senderAccountNonce = await this.app.getAccountNonce(senderAddress)
+        txNonce = await this.app.getNonceFromTx(tx)
+        this.seqLogger.info(
+          `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+            Self.id
+          )}: sNonce:${senderAccountNonce}`
+        )
+        this.seqLogger.info(
+          `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+            Self.id
+          )}: txNonce:${txNonce}`
+        )
 
         if (senderAccountNonce == null) {
           if (this.config.mode === ShardusTypes.ServerMode.Release) {
             return {
               success: false,
               reason: `Sender account nonce is not available. ${utils.stringifyReduce(tx)}`,
-              status: 500
-            };
+              status: 500,
+            }
           }
-          senderAccountNonce = BigInt(0);
+          senderAccountNonce = BigInt(0)
         }
 
         // app layer should return -1 if the account or tx does not have a nonce field
         if (txNonce >= 0 && senderAccountNonce >= 0) {
           if (txNonce < senderAccountNonce) {
-            if (logFlags.debug) this.mainLogger.debug(`txNonce < senderAccountNonce ${txNonce} < ${senderAccountNonce}`);
+            if (logFlags.debug)
+              this.mainLogger.debug(`txNonce < senderAccountNonce ${txNonce} < ${senderAccountNonce}`)
             nestedCountersInstance.countEvent('rejected', 'txNonce < senderAccountNonce')
             return {
               success: false,
               reason: `Transaction nonce is less than the account nonce. ${utils.stringifyReduce(tx)}`,
-              status: 500
-            };
+              status: 500,
+            }
           } else if (txNonce > senderAccountNonce) {
             // if the tx is already in the nonceQueue (based on txid not nonce), return an accepted response
-            const txInNonceQueue = this.stateManager.transactionQueue.isTxInPendingNonceQueue(senderAddress, txId)
+            const txInNonceQueue = this.stateManager.transactionQueue.isTxInPendingNonceQueue(
+              senderAddress,
+              txId
+            )
             if (txInNonceQueue) {
               return {
                 success: true,
                 reason: `Transaction is already in pending nonce queue.`,
-                status: 200
+                status: 200,
               }
             }
-            if (logFlags.debug) this.mainLogger.debug(`txNonce > senderAccountNonce ${txNonce} > ${senderAccountNonce} but txId is not in nonce queue yet`)
+            if (logFlags.debug)
+              this.mainLogger.debug(
+                `txNonce > senderAccountNonce ${txNonce} > ${senderAccountNonce} but txId is not in nonce queue yet`
+              )
 
             // decide whether to put it in the nonce queue or not
-            const maxAllowedPendingNonce = senderAccountNonce + BigInt(Context.config.stateManager.maxPendingNonceTxs)
-            if ( txNonce <= maxAllowedPendingNonce) {
-              shouldAddToNonceQueue = true;
-              if (logFlags.debug) this.mainLogger.debug(`txNonce > senderAccountNonce ${txNonce} > ${senderAccountNonce}`);
+            const maxAllowedPendingNonce =
+              senderAccountNonce + BigInt(Context.config.stateManager.maxPendingNonceTxs)
+            if (txNonce <= maxAllowedPendingNonce) {
+              shouldAddToNonceQueue = true
+              if (logFlags.debug)
+                this.mainLogger.debug(`txNonce > senderAccountNonce ${txNonce} > ${senderAccountNonce}`)
             } else {
-              if (logFlags.debug) this.mainLogger.debug(`txNonce > senderAccountNonce ${txNonce} > ${senderAccountNonce} + ${Context.config.stateManager.maxPendingNonceTxs}`);
-              nestedCountersInstance.countEvent('rejected', 'txNonce > senderAccountNonce + maxPendingNonceTxs')
+              if (logFlags.debug)
+                this.mainLogger.debug(
+                  `txNonce > senderAccountNonce ${txNonce} > ${senderAccountNonce} + ${Context.config.stateManager.maxPendingNonceTxs}`
+                )
+              nestedCountersInstance.countEvent(
+                'rejected',
+                'txNonce > senderAccountNonce + maxPendingNonceTxs'
+              )
               return {
                 success: false,
                 reason: `Transaction nonce ${txNonce.toString()} is greater than max allowed pending nonce of ${maxAllowedPendingNonce.toString()}`,
-                status: 500
-              };
+                status: 500,
+              }
             }
           }
         }
@@ -1508,11 +1562,15 @@ class Shardus extends EventEmitter {
       }
       const shouldQueueNonceButPoolIsFull =
         shouldAddToNonceQueue &&
-        this.config.stateManager.maxNonceQueueSize <= this.stateManager.transactionQueue.nonceQueue.size;
+        this.config.stateManager.maxNonceQueueSize <= this.stateManager.transactionQueue.nonceQueue.size
 
       //ITN fix. There will be separate effort to protect the pool more intelligently for mainnet.
-      if(shouldQueueNonceButPoolIsFull) {
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: reject_nonce_full`)
+      if (shouldQueueNonceButPoolIsFull) {
+        this.seqLogger.info(
+          `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+            Self.id
+          )}: reject_nonce_full`
+        )
         nestedCountersInstance.countEvent('rejected', `Nonce pool is full, try again later`)
         return {
           success: false,
@@ -1533,15 +1591,21 @@ class Shardus extends EventEmitter {
         let nonceQueueAddResult =
           this.stateManager.transactionQueue.addTransactionToNonceQueue(nonceQueueEntry)
 
-        if(Context.config.stateManager.forwardToLuckyNodesNonceQueue){
-          let result = this.forwardTransactionToLuckyNodes(senderAddress, tx, txId, 'consensus to consensus', '3') // don't wait here
+        if (Context.config.stateManager.forwardToLuckyNodesNonceQueue) {
+          let result = this.forwardTransactionToLuckyNodes(
+            senderAddress,
+            tx,
+            txId,
+            'consensus to consensus',
+            '3'
+          ) // don't wait here
           return result as Promise<{ success: boolean; reason: string; status: number; txId?: string }>
         } else {
           return {
             success: true,
             reason: `Transaction added to pending nonce queue.`,
-            status: 200
-          }            
+            status: 200,
+          }
         }
       } else {
         // tx nonce is equal to account nonce
@@ -1563,7 +1627,13 @@ class Shardus extends EventEmitter {
     }
   }
 
-  async forwardTransactionToLuckyNodes(senderAddress: string, tx: ShardusTypes.OpaqueTransaction, txId: string, message = '', context = ''): Promise<unknown> {
+  async forwardTransactionToLuckyNodes(
+    senderAddress: string,
+    tx: ShardusTypes.OpaqueTransaction,
+    txId: string,
+    message = '',
+    context = ''
+  ): Promise<unknown> {
     let closetNodeIds = this.getClosestNodes(
       senderAddress,
       Context.config.stateManager.numberOfReInjectNodes,
@@ -1589,33 +1659,37 @@ class Shardus extends EventEmitter {
         publicKey: homeNode.node.publicKey,
       })
 
-    let  stats ={
-      skippedSelf:0,
-      skippedRotation:0,
-      skippedHome:0
+    let stats = {
+      skippedSelf: 0,
+      skippedRotation: 0,
+      skippedHome: 0,
     }
 
     for (const id of closetNodeIds) {
-      this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_closetnode_${context} ${activeIdToPartition.get(id)}`)
+      this.seqLogger.info(
+        `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+          Self.id
+        )}: lucky_forward_closetnode_${context} ${activeIdToPartition.get(id)}`
+      )
       if (id === Self.id) {
         stats.skippedSelf++
         continue
       }
-      if (id === homeNode.node.id){
+      if (id === homeNode.node.id) {
         stats.skippedHome++
         continue // we already added the home node
-      } 
+      }
       let node = nodes.get(id)
 
       //is this node safe in terms of rotation
-      let rotationCheckPassed = true 
-      if(Context.config.stateManager.forwardToLuckyNodesCheckRotation) {
-        //is in rotation means it in the edge 
+      let rotationCheckPassed = true
+      if (Context.config.stateManager.forwardToLuckyNodesCheckRotation) {
+        //is in rotation means it in the edge
         rotationCheckPassed = isNodeInRotationBounds(id) === false
       }
 
       // if the node is not active or not in rotation bounds, skip it
-      if (node.status !== 'active' || (rotationCheckPassed === false)) {
+      if (node.status !== 'active' || rotationCheckPassed === false) {
         /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `forwardTransactionToLuckyNodes: node ${id} is not active or in rotation bounds. node.status: ${ node.status } isNodeInRotationBounds: ${isNodeInRotationBounds(id)}` )
         stats.skippedRotation++
         continue
@@ -1630,7 +1704,11 @@ class Shardus extends EventEmitter {
     }
     for (const validator of selectedValidators) {
       try {
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_req_${context} ${activeIdToPartition.get(validator.id)}`)
+        this.seqLogger.info(
+          `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+            Self.id
+          )}: lucky_forward_req_${context} ${activeIdToPartition.get(validator.id)}`
+        )
 
         if (validator.id === homeNode.node.id) {
           /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Forwarding injected tx ${txId} to home node ${validator.id} reason: ${message} ${utils.stringify(tx)}` )
@@ -1639,26 +1717,42 @@ class Shardus extends EventEmitter {
           /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Forwarding injected tx ${txId} to consensus group. reason: ${message} ${utils.stringify(tx)}` )
           nestedCountersInstance.countEvent('statistics', `forwardTxToConsensusGroup: ${message}`)
         }
-        
+
         const result: ShardusTypes.InjectTxResponse = await this.app.injectTxToConsensor([validator], tx)
 
         if (result == null) {
-          this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_null_${context} ${activeIdToPartition.get(validator.id)}`)
+          this.seqLogger.info(
+            `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+              Self.id
+            )}: lucky_forward_null_${context} ${activeIdToPartition.get(validator.id)}`
+          )
           /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got null/undefined response upon forwarding injected tx: ${txId} to node ${validator.id}` )
           continue
         }
         if (result && result.success === false) {
-          this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_false_${context} ${activeIdToPartition.get(validator.id)}`)
+          this.seqLogger.info(
+            `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+              Self.id
+            )}: lucky_forward_false_${context} ${activeIdToPartition.get(validator.id)}`
+          )
           /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got unsuccessful response upon forwarding injected tx: ${validator.id}. ${message} ${utils.stringify(tx)}` )
           continue
         }
         if (result && result.success === true) {
-          this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_success_${context} ${activeIdToPartition.get(validator.id)}`)
+          this.seqLogger.info(
+            `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+              Self.id
+            )}: lucky_forward_success_${context} ${activeIdToPartition.get(validator.id)}`
+          )
           /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got successful response upon forwarding injected tx: ${validator.id}. ${message} ${utils.stringify(tx)}` )
           return { success: true, reason: 'Transaction forwarded to validators', status: 200 }
         }
       } catch (e) {
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_ex_${context} ${activeIdToPartition.get(validator.id)}`)
+        this.seqLogger.info(
+          `0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(
+            Self.id
+          )}: lucky_forward_ex_${context} ${activeIdToPartition.get(validator.id)}`
+        )
         /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.error( `Forwarding injected tx to ${validator.id} failed. ${message} ${utils.stringify(tx)} error: ${ e.stack }` )
       }
     }
@@ -2699,13 +2793,14 @@ class Shardus extends EventEmitter {
         applicationInterfaceImpl.getTxSenderAddress = (tx) => application.getTxSenderAddress(tx)
       }
       if (typeof application.injectTxToConsensor === 'function') {
-        applicationInterfaceImpl.injectTxToConsensor = (consensor, tx) => application.injectTxToConsensor(consensor, tx)
+        applicationInterfaceImpl.injectTxToConsensor = (consensor, tx) =>
+          application.injectTxToConsensor(consensor, tx)
       }
-      if (typeof application.getNonceFromTx === "function") {
-        applicationInterfaceImpl.getNonceFromTx = (tx) => application.getNonceFromTx(tx);
+      if (typeof application.getNonceFromTx === 'function') {
+        applicationInterfaceImpl.getNonceFromTx = (tx) => application.getNonceFromTx(tx)
       }
-      if (typeof application.getAccountNonce === "function") {
-        applicationInterfaceImpl.getAccountNonce = (accountId) => application.getAccountNonce(accountId);
+      if (typeof application.getAccountNonce === 'function') {
+        applicationInterfaceImpl.getAccountNonce = (accountId) => application.getAccountNonce(accountId)
       }
     } catch (ex) {
       this.shardus_fatal(

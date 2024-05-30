@@ -103,7 +103,7 @@ export type LogFlags = {
   dapp_verbose: boolean //the dapp using this library will read this flag and log more info if true
   profiling_verbose: boolean
 
-  aalg:boolean //details on automatic access list generation
+  aalg: boolean //details on automatic access list generation
   shardedCache: boolean //details on the sharded cache
 
   lost: boolean // extra logging for the lost system
@@ -145,7 +145,7 @@ export let logFlags: LogFlags = {
   shardedCache: false,
   lost: false,
   rotation: false,
-  seqdiagram: false
+  seqdiagram: false,
 }
 
 const filePath1 = path.join(process.cwd(), 'data-logs', 'cycleRecords1.txt')

@@ -897,20 +897,40 @@ export async function sendGossip(
   //console.log('originIdx ', originIdx)
 
   if (context != '')
-    seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipContext:${context}`)
+    seqLogger.info(
+      `0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+        Self.id
+      )}: gossipContext:${context}`
+    )
   if (originIdx !== undefined && originIdx >= 0) {
     // If it is protocol tx signed by a node in the network
     recipientIdxs = utils.getLinearGossipBurstList(nodeIdxs.length, gossipFactor, myIdx, originIdx)
     if (logFlags.seqdiagram && txId != '') {
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipBin:${nodeIdxs.length},${gossipFactor},${myIdx},${originIdx}`)
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipBout:${recipientIdxs}`)
+      seqLogger.info(
+        `0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+          Self.id
+        )}: gossipBin:${nodeIdxs.length},${gossipFactor},${myIdx},${originIdx}`
+      )
+      seqLogger.info(
+        `0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+          Self.id
+        )}: gossipBout:${recipientIdxs}`
+      )
     }
   } else {
     // If it is app tx which is not signed by a node in the network
     recipientIdxs = utils.getLinearGossipList(nodeIdxs.length, gossipFactor, myIdx, isOrigin)
     if (logFlags.seqdiagram && txId != '') {
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipLin:${nodeIdxs.length},${gossipFactor},${myIdx},${isOrigin}`)
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipLout:${recipientIdxs}`)
+      seqLogger.info(
+        `0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+          Self.id
+        )}: gossipLin:${nodeIdxs.length},${gossipFactor},${myIdx},${isOrigin}`
+      )
+      seqLogger.info(
+        `0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+          Self.id
+        )}: gossipLout:${recipientIdxs}`
+      )
     }
   }
 
@@ -963,7 +983,13 @@ export async function sendGossip(
         } else {
           /* prettier-ignore */ nestedCountersInstance.countEvent('p2p-skip-send', 'skipping gossip')
           /* prettier-ignore */ nestedCountersInstance.countEvent( 'p2p-skip-send', `skipping gossip ${node.internalIp}:${node.externalPort}` )
-          seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipSkip:${NodeList.activeIdToPartition.get(node.id)}:${node.internalIp}:${node.externalPort}`)
+          seqLogger.info(
+            `0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+              Self.id
+            )}: gossipSkip:${NodeList.activeIdToPartition.get(node.id)}:${node.internalIp}:${
+              node.externalPort
+            }`
+          )
         }
       })
       const newCount = recipients.length
@@ -980,15 +1006,17 @@ export async function sendGossip(
     if (logFlags.seqdiagram && txId != '') {
       let prefix = ''
       let suffix = ''
-      if (isOrigin)
-        prefix = 'orig:'
-      if (context != '')
-        suffix = `:${suffix}`
-      for (const node of recipients) {        
-        seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: g:${prefix}${type}${suffix}`)
+      if (isOrigin) prefix = 'orig:'
+      if (context != '') suffix = `:${suffix}`
+      for (const node of recipients) {
+        seqLogger.info(
+          `0x53455103 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(
+            Self.id
+          )}-->>${NodeList.activeIdToPartition.get(node.id)}: g:${prefix}${type}${suffix}`
+        )
       }
     }
-    
+
     if (config.p2p.useBinarySerializedEndpoints === true) {
       msgSize = await tellBinary<GossipReqBinary>(
         recipients,

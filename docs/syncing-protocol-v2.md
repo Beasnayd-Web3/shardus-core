@@ -44,8 +44,8 @@ Computing the hash occurs during cycleCreator() immediately after digesting the 
 // CycleCreator.ts
 // async function cycleCreator() {
 //   ...
-     if (!CycleChain.newest || CycleChain.newest.counter < prevRecord.counter) Sync.digestCycle(prevRecord)
-     // --> hash here
+if (!CycleChain.newest || CycleChain.newest.counter < prevRecord.counter) Sync.digestCycle(prevRecord)
+// --> hash here
 ```
 
 See https://gitlab.com/shardus/global/shardus-global-server/-/blob/master/src/p2p/CycleCreator.ts#L272

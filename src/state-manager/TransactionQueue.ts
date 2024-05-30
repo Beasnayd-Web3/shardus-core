@@ -10,7 +10,7 @@ import { nodes, byPubKey, potentiallyRemoved } from '../p2p/NodeList'
 import * as Shardus from '../shardus/shardus-types'
 import Storage from '../storage'
 import * as utils from '../utils'
-import {Signature, SignedObject} from '@shardus/crypto-utils'
+import { Signature, SignedObject } from '@shardus/crypto-utils'
 import {
   errorToStringFull,
   inRangeOfCurrentTime,
@@ -47,7 +47,7 @@ import {
   WrappedResponses,
   ArchiverReceipt,
   NonceQueueItem,
-  AppliedVote
+  AppliedVote,
 } from './state-manager-types'
 import { isInternalTxAllowed, networkMode } from '../p2p/Modes'
 import { Node } from '@shardus/types/build/src/p2p/NodeListTypes'
@@ -203,7 +203,7 @@ class TransactionQueue {
     storage: Storage,
     p2p: P2P,
     crypto: Crypto,
-    config: Shardus.StrictServerConfiguration,
+    config: Shardus.StrictServerConfiguration
   ) {
     this.crypto = crypto
     this.app = app
@@ -574,7 +574,9 @@ class TransactionQueue {
               if (data == null) {
                 continue
               }
-              const storageNodes = this.stateManager.transactionQueue.getStorageGroupForAccount(data.accountId)
+              const storageNodes = this.stateManager.transactionQueue.getStorageGroupForAccount(
+                data.accountId
+              )
               for (const node of storageNodes) {
                 nodesToSendTo.add(node)
               }
@@ -760,7 +762,9 @@ class TransactionQueue {
               if (data == null) {
                 continue
               }
-              const storageNodes = this.stateManager.transactionQueue.getStorageGroupForAccount(data.accountId)
+              const storageNodes = this.stateManager.transactionQueue.getStorageGroupForAccount(
+                data.accountId
+              )
               for (const node of storageNodes) {
                 nodesToSendTo.add(node)
               }
@@ -937,7 +941,8 @@ class TransactionQueue {
             if (!queueEntry) return res.status(400).json({ success: false, reason: 'Receipt Not Found.' })
             if (full_receipt) {
               const fullReceipt: ArchiverReceipt = this.getArchiverReceiptFromQueueEntry(queueEntry)
-              if (fullReceipt === null) return res.status(400).json({ success: false, reason: 'Receipt Not Found.' })
+              if (fullReceipt === null)
+                return res.status(400).json({ success: false, reason: 'Receipt Not Found.' })
               result = JSON.parse(utils.cryptoStringify({ success: true, receipt: fullReceipt }))
             } else {
               result = { success: true, receipt: this.stateManager.getReceipt2(queueEntry) }
@@ -968,7 +973,7 @@ class TransactionQueue {
     return false
   }
 
-  getPendingCountInNonceQueue(): { totalQueued: number; totalAccounts: number; avgQueueLength: number} {
+  getPendingCountInNonceQueue(): { totalQueued: number; totalAccounts: number; avgQueueLength: number } {
     let totalQueued = 0
     let totalAccounts = 0
     for (const queue of this.nonceQueue.values()) {
@@ -979,13 +984,16 @@ class TransactionQueue {
     return { totalQueued, totalAccounts, avgQueueLength }
   }
 
-  addTransactionToNonceQueue(nonceQueueEntry: NonceQueueItem): {success: boolean; reason?: string} {
+  addTransactionToNonceQueue(nonceQueueEntry: NonceQueueItem): { success: boolean; reason?: string } {
     try {
       let queue = this.nonceQueue.get(nonceQueueEntry.accountId)
       if (queue == null || (Array.isArray(queue) && queue.length === 0)) {
         queue = [nonceQueueEntry]
         this.nonceQueue.set(nonceQueueEntry.accountId, queue)
-        if (logFlags.debug) this.mainLogger.debug(`addinng new nonce tx: ${nonceQueueEntry.txId} ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}`)
+        if (logFlags.debug)
+          this.mainLogger.debug(
+            `addinng new nonce tx: ${nonceQueueEntry.txId} ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}`
+          )
       } else if (queue && queue.length > 0) {
         for (let i = 0; i < queue.length; i++) {
           if (queue[i].nonce === nonceQueueEntry.nonce) {
@@ -994,7 +1002,10 @@ class TransactionQueue {
             queue = queue.sort((a, b) => Number(a.nonce) - Number(b.nonce))
             this.nonceQueue.set(nonceQueueEntry.accountId, queue)
             nestedCountersInstance.countEvent('processing', 'replaceExistingNonceTx')
-            if (logFlags.debug) this.mainLogger.debug(`replace existing nonce tx ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}, txId: ${nonceQueueEntry.txId}`)
+            if (logFlags.debug)
+              this.mainLogger.debug(
+                `replace existing nonce tx ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}, txId: ${nonceQueueEntry.txId}`
+              )
             return { success: true, reason: 'Replace existing pending nonce tx' }
           }
         }
@@ -1003,13 +1014,22 @@ class TransactionQueue {
         queue = queue.sort((a, b) => Number(a.nonce) - Number(b.nonce))
         this.nonceQueue.set(nonceQueueEntry.accountId, queue)
       }
-      this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${nonceQueueEntry.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: pause_nonceQ`)
+      this.seqLogger.info(
+        `0x53455106 ${shardusGetTime()} tx:${
+          nonceQueueEntry.txId
+        } Note over ${NodeList.activeIdToPartition.get(Self.id)}: pause_nonceQ`
+      )
       nestedCountersInstance.countEvent('processing', 'addTransactionToNonceQueue')
-      if (logFlags.debug) this.mainLogger.debug(`Added tx to nonce queue for ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce} nonceQueue: ${queue.length}`)
+      if (logFlags.debug)
+        this.mainLogger.debug(
+          `Added tx to nonce queue for ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce} nonceQueue: ${queue.length}`
+        )
       return { success: true, reason: `Nonce queue size for account: ${queue.length}` }
     } catch (e) {
       nestedCountersInstance.countEvent('processing', 'addTransactionToNonceQueueError')
-      this.mainLogger.error(`Error adding tx to nonce queue: ${e.message}, tx: ${utils.stringifyReduce(nonceQueueEntry)}`)
+      this.mainLogger.error(
+        `Error adding tx to nonce queue: ${e.message}, tx: ${utils.stringifyReduce(nonceQueueEntry)}`
+      )
       return { success: false, reason: e.message }
     }
   }
@@ -1023,9 +1043,18 @@ class TransactionQueue {
         const accountNonce = await this.app.getAccountNonce(account.accountId, account)
         if (item.nonce === accountNonce) {
           nestedCountersInstance.countEvent('processing', 'processNonceQueue foundMatchingNonce')
-          if (logFlags.debug) this.mainLogger.debug(`Found matching nonce in queue or ${account.accountId} with nonce ${item.nonce}`, item)
+          if (logFlags.debug)
+            this.mainLogger.debug(
+              `Found matching nonce in queue or ${account.accountId} with nonce ${item.nonce}`,
+              item
+            )
           item.appData.requestNewTimestamp = true
-          await this.stateManager.shardus._timestampAndQueueTransaction(item.tx, item.appData, item.global, item.noConsensus)
+          await this.stateManager.shardus._timestampAndQueueTransaction(
+            item.tx,
+            item.appData,
+            item.global,
+            item.noConsensus
+          )
           // remove the item from the queue
           const index = queue.indexOf(item)
           queue.splice(index, 1)
@@ -1568,7 +1597,9 @@ class TransactionQueue {
       }
 
       if (logFlags.verbose) {
-        this.mainLogger.debug(`commitConsensedTransaction ${queueEntry.logID}  savedSomething: ${savedSomething}`)
+        this.mainLogger.debug(
+          `commitConsensedTransaction ${queueEntry.logID}  savedSomething: ${savedSomething}`
+        )
         this.mainLogger.debug(
           `commitConsensedTransaction  accountData[${accountDataList.length}]: ${utils.stringifyReduce(
             accountDataList
@@ -1861,7 +1892,10 @@ class TransactionQueue {
         for (const key of keysToCheck) {
           const isAccountInQueue = this.isAccountInQueue(key)
           if (isAccountInQueue) {
-            nestedCountersInstance.countEvent('stateManager', `cancel enqueue, isAccountInQueue ${key} ${isAccountInQueue}`)
+            nestedCountersInstance.countEvent(
+              'stateManager',
+              `cancel enqueue, isAccountInQueue ${key} ${isAccountInQueue}`
+            )
             return false
           }
         }
@@ -1969,7 +2003,7 @@ class TransactionQueue {
         topConfirmations: new Set(),
         topVoters: new Set(),
         hasRobustConfirmation: false,
-        sharedCompleteData: false
+        sharedCompleteData: false,
       } // age comes from timestamp
       this.txDebugMarkStartTime(txQueueEntry, 'total_queue_time')
       this.txDebugMarkStartTime(txQueueEntry, 'aging')
@@ -2077,7 +2111,7 @@ class TransactionQueue {
               txQueueEntry.acceptedTx.txId,
               txQueueEntry.acceptedTx.timestamp
             )
-          }                    
+          }
 
           const minNodesToVote = 3
           const voterPercentage = configContext.stateManager.voterPercentage
@@ -2089,13 +2123,13 @@ class TransactionQueue {
           txQueueEntry.eligibleNodeIdsToVote = new Set(
             txQueueEntry.executionGroup.slice(0, numberOfVoters).map((node) => node.id)
           )
-          
+
           // confirm nodes are lowest ranked nodes
           txQueueEntry.eligibleNodeIdsToConfirm = new Set(
             txQueueEntry.executionGroup
               .slice(txQueueEntry.executionGroup.length - numberOfVoters)
               .map((node) => node.id)
-          )          
+          )
 
           const ourID = this.stateManager.currentCycleShardData.ourNode.id
           for (let idx = 0; idx < txQueueEntry.executionGroup.length; idx++) {
@@ -2104,15 +2138,27 @@ class TransactionQueue {
             txQueueEntry.executionGroupMap.set(node.id, node)
             if (node.id === ourID) {
               txQueueEntry.ourExGroupIndex = idx
-              this.seqLogger.info(`0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: index ${txQueueEntry.ourExGroupIndex}:${(node as Shardus.NodeWithRank).rank}`)
-            }            
+              this.seqLogger.info(
+                `0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+                  Self.id
+                )}: index ${txQueueEntry.ourExGroupIndex}:${(node as Shardus.NodeWithRank).rank}`
+              )
+            }
           }
           if (txQueueEntry.eligibleNodeIdsToConfirm.has(Self.id)) {
-            this.seqLogger.info(`0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: confirmator`)
+            this.seqLogger.info(
+              `0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+                Self.id
+              )}: confirmator`
+            )
           }
           if (txQueueEntry.eligibleNodeIdsToVote.has(Self.id)) {
-            this.seqLogger.info(`0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: voter`)
-          }          
+            this.seqLogger.info(
+              `0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(
+                Self.id
+              )}: voter`
+            )
+          }
 
           //if we are not in the execution group then set isInExecutionHome to false
           if (
@@ -2235,7 +2281,16 @@ class TransactionQueue {
               if (transactionGroup.length > 1) {
                 // should consider only forwarding in some cases?
                 this.stateManager.debugNodeGroup(txId, timestamp, `share to neighbors`, transactionGroup)
-                this.p2p.sendGossipIn('spread_tx_to_group', acceptedTx, '', sender, transactionGroup, true, -1, acceptedTx.txId)
+                this.p2p.sendGossipIn(
+                  'spread_tx_to_group',
+                  acceptedTx,
+                  '',
+                  sender,
+                  transactionGroup,
+                  true,
+                  -1,
+                  acceptedTx.txId
+                )
                 /* prettier-ignore */ if (logFlags.verbose) console.log( 'spread_tx_to_group', txId, txQueueEntry.executionGroup.length, txQueueEntry.conensusGroup.length, txQueueEntry.transactionGroup.length )
                 this.addOriginalTxDataToForward(txQueueEntry)
               }
@@ -2297,10 +2352,18 @@ class TransactionQueue {
                       this.stateManager.config.p2p.spreadTxToGroupSyncingBinary
                     ) {
                       if (logFlags.seqdiagram) {
-                        for (const node of this.stateManager.currentCycleShardData.syncingNeighborsTxGroup) {                
-                          this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${acceptedTx.txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'spread_tx_to_group_syncing'}`)
+                        for (const node of this.stateManager.currentCycleShardData.syncingNeighborsTxGroup) {
+                          this.seqLogger.info(
+                            `0x53455102 ${shardusGetTime()} tx:${
+                              acceptedTx.txId
+                            } ${NodeList.activeIdToPartition.get(
+                              Self.id
+                            )}-->>${NodeList.activeIdToPartition.get(
+                              node.id
+                            )}: ${'spread_tx_to_group_syncing'}`
+                          )
                         }
-                      }                      
+                      }
                       const request = acceptedTx as SpreadTxToGroupSyncingReq
                       this.p2p.tellBinary<SpreadTxToGroupSyncingReq>(
                         this.stateManager.currentCycleShardData.syncingNeighborsTxGroup,
@@ -2352,7 +2415,12 @@ class TransactionQueue {
         this.pendingTransactionQueue.push(txQueueEntry)
         this.pendingTransactionQueueByID.set(txQueueEntry.acceptedTx.txId, txQueueEntry)
 
-        if (logFlags.seqdiagram) this.seqLogger.info(`0x53455105 ${shardusGetTime()} tx:${txQueueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: pendingQ`)
+        if (logFlags.seqdiagram)
+          this.seqLogger.info(
+            `0x53455105 ${shardusGetTime()} tx:${
+              txQueueEntry.acceptedTx.txId
+            } Note over ${NodeList.activeIdToPartition.get(Self.id)}: pendingQ`
+          )
 
         /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('shrd_txPreQueued', `${txQueueEntry.logID}`, `${txQueueEntry.logID} gm:${txQueueEntry.globalModification}`)
         // start the queue if needed
@@ -2389,15 +2457,19 @@ class TransactionQueue {
         })
         if (accountData != null) {
           this.app.setCachedRIAccountData([accountData])
-          this.queueEntryAddData(txQueueEntry, {
-            accountId: accountData.accountId,
+          this.queueEntryAddData(
+            txQueueEntry,
+            {
+              accountId: accountData.accountId,
               stateId: accountData.stateId,
               data: accountData.data,
               timestamp: accountData.timestamp,
               syncData: accountData.syncData,
               accountCreated: false,
               isPartial: false,
-          }, false)
+            },
+            false
+          )
           /* prettier-ignore */ nestedCountersInstance.countEvent('transactionQueue', 'queueEntryPrePush_ri_added')
         }
       }
@@ -2473,16 +2545,21 @@ class TransactionQueue {
           foundQueueEntry = true
           const receipt2: AppliedReceipt2 = this.stateManager.getReceipt2(queueEntry)
           let bestReceivedVote
-          if (receipt2 !=  null) {
+          if (receipt2 != null) {
             bestReceivedVote = receipt2.appliedVote
-            if (receipt2.appliedVote) nestedCountersInstance.countEvent('getArchivedQueueEntryByAccountIdAndHash', 'get vote from' +
-              ' receipt2')
+            if (receipt2.appliedVote)
+              nestedCountersInstance.countEvent(
+                'getArchivedQueueEntryByAccountIdAndHash',
+                'get vote from' + ' receipt2'
+              )
           }
           if (bestReceivedVote == null) {
             bestReceivedVote = queueEntry.receivedBestVote
-            if (queueEntry.receivedBestVote) nestedCountersInstance.countEvent('getArchivedQueueEntryByAccountIdAndHash', 'get vote' +
-              ' from' +
-              ' receipt2')
+            if (queueEntry.receivedBestVote)
+              nestedCountersInstance.countEvent(
+                'getArchivedQueueEntryByAccountIdAndHash',
+                'get vote' + ' from' + ' receipt2'
+              )
           }
           if (bestReceivedVote == null) {
             continue
@@ -2500,9 +2577,12 @@ class TransactionQueue {
         }
       }
       nestedCountersInstance.countRareEvent('error', `getQueueEntryArchived no entry: ${msg}`)
-      nestedCountersInstance.countEvent('error', `getQueueEntryArchived no entry: ${msg}, found queue entry: ${foundQueueEntry}, found vote: ${foundVote}, found vote matching hash: ${foundVoteMatchingHash}`)
+      nestedCountersInstance.countEvent(
+        'error',
+        `getQueueEntryArchived no entry: ${msg}, found queue entry: ${foundQueueEntry}, found vote: ${foundVote}, found vote matching hash: ${foundVoteMatchingHash}`
+      )
       return null
-    } catch(e) {
+    } catch (e) {
       this.statemanager_fatal(`getArchivedQueueEntryByAccountIdAndHash`, `error: ${e.message}`)
       return null
     }
@@ -2556,7 +2636,6 @@ class TransactionQueue {
       return
     }
 
-
     if (signatureCheck) {
       const dataSenderPublicKey = data.sign.owner
       const dataSenderNode: Shardus.Node = byPubKey[dataSenderPublicKey]
@@ -2565,9 +2644,14 @@ class TransactionQueue {
         return
       }
       const consensusNodesForAccount = queueEntry.homeNodes[data.accountId]?.consensusNodeForOurNodeFull
-      if (consensusNodesForAccount == null || consensusNodesForAccount.map(n => n.id).includes(dataSenderNode.id) === false) {
-        nestedCountersInstance.countEvent('queueEntryAddData', 'data sender node is not in the consensus group of the' +
-          ' account')
+      if (
+        consensusNodesForAccount == null ||
+        consensusNodesForAccount.map((n) => n.id).includes(dataSenderNode.id) === false
+      ) {
+        nestedCountersInstance.countEvent(
+          'queueEntryAddData',
+          'data sender node is not in the consensus group of the' + ' account'
+        )
         return
       }
 
@@ -2578,7 +2662,6 @@ class TransactionQueue {
         return
       }
     }
-
 
     queueEntry.collectedData[data.accountId] = data
     queueEntry.dataCollected++
@@ -2591,10 +2674,13 @@ class TransactionQueue {
       //  queueEntry.tx Keys.allKeys.length
       queueEntry.hasAll = true
       // this.gossipCompleteData(queueEntry)
-      if (queueEntry.executionGroup && queueEntry.executionGroup.length > 1) this.shareCompleteDataToNeighbours(queueEntry)
+      if (queueEntry.executionGroup && queueEntry.executionGroup.length > 1)
+        this.shareCompleteDataToNeighbours(queueEntry)
       if (logFlags.debug || this.stateManager.consensusLog) {
         this.mainLogger.debug(
-          `queueEntryAddData hasAll: true for txId ${queueEntry.logID} ${queueEntry.acceptedTx.txId} at timestamp: ${shardusGetTime()} nodeId: ${Self.id}`
+          `queueEntryAddData hasAll: true for txId ${queueEntry.logID} ${
+            queueEntry.acceptedTx.txId
+          } at timestamp: ${shardusGetTime()} nodeId: ${Self.id}`
         )
       }
     }
@@ -2631,16 +2717,23 @@ class TransactionQueue {
         stateList.push(data)
       }
     }
-    const payload = {txid: queueEntry.acceptedTx.txId, stateList}
+    const payload = { txid: queueEntry.acceptedTx.txId, stateList }
     const neighboursNodes = utils.selectNeighbors(queueEntry.executionGroup, queueEntry.ourExGroupIndex, 2)
     if (stateList.length > 0) {
-      this.broadcastState(neighboursNodes, payload, "shareCompleteDataToNeighbours")
+      this.broadcastState(neighboursNodes, payload, 'shareCompleteDataToNeighbours')
 
       queueEntry.sharedCompleteData = true
-      nestedCountersInstance.countEvent(`queueEntryAddData`, `sharedCompleteData stateList: ${stateList.length} neighbours: ${neighboursNodes.length}`)
+      nestedCountersInstance.countEvent(
+        `queueEntryAddData`,
+        `sharedCompleteData stateList: ${stateList.length} neighbours: ${neighboursNodes.length}`
+      )
       if (logFlags.debug || this.stateManager.consensusLog) {
         this.mainLogger.debug(
-          `shareCompleteDataToNeighbours: shared complete data for txId ${queueEntry.logID} at timestamp: ${shardusGetTime()} nodeId: ${Self.id} to neighbours: ${JSON.stringify(neighboursNodes.map((node) => node.id))}`
+          `shareCompleteDataToNeighbours: shared complete data for txId ${
+            queueEntry.logID
+          } at timestamp: ${shardusGetTime()} nodeId: ${Self.id} to neighbours: ${JSON.stringify(
+            neighboursNodes.map((node) => node.id)
+          )}`
         )
       }
     }
@@ -2666,7 +2759,7 @@ class TransactionQueue {
         stateList.push(data)
       }
     }
-    const payload = {txid: queueEntry.acceptedTx.txId, stateList}
+    const payload = { txid: queueEntry.acceptedTx.txId, stateList }
     if (stateList.length > 0) {
       Comms.sendGossip(
         'broadcast_state_complete_data',
@@ -2682,7 +2775,9 @@ class TransactionQueue {
       nestedCountersInstance.countEvent('gossipCompleteData', `stateList: ${stateList.length}`)
       if (logFlags.debug || this.stateManager.consensusLog) {
         this.mainLogger.debug(
-          `gossipQueueEntryData: gossiped data for txId ${queueEntry.logID} at timestamp: ${shardusGetTime()} nodeId: ${Self.id}`
+          `gossipQueueEntryData: gossiped data for txId ${
+            queueEntry.logID
+          } at timestamp: ${shardusGetTime()} nodeId: ${Self.id}`
         )
       }
     }
@@ -2877,7 +2972,12 @@ class TransactionQueue {
           try {
             if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.requestStateForTxBinary) {
               // GOLD-66 Error handling try/catch happens one layer outside of this function in process transactions
-              if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_state_for_tx'}`)
+              if (logFlags.seqdiagram)
+                this.seqLogger.info(
+                  `0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(
+                    Self.id
+                  )}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_state_for_tx'}`
+                )
               result = (await this.p2p.askBinary<RequestStateForTxReq, RequestStateForTxRespSerialized>(
                 node,
                 InternalRouteEnum.binary_request_state_for_tx,
@@ -2958,7 +3058,7 @@ class TransactionQueue {
       //give up and wait for receipt
       queueEntry.waitForReceiptOnly = true
 
-      if(this.config.stateManager.txStateMachineChanges){
+      if (this.config.stateManager.txStateMachineChanges) {
         this.updateTxState(queueEntry, 'await final data', 'missing data')
       } else {
         this.updateTxState(queueEntry, 'consensing')
@@ -3066,7 +3166,12 @@ class TransactionQueue {
           this.stateManager.config.p2p.requestReceiptForTxBinary
         ) {
           try {
-            if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_receipt_for_tx'}`)
+            if (logFlags.seqdiagram)
+              this.seqLogger.info(
+                `0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(
+                  Self.id
+                )}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_receipt_for_tx'}`
+              )
             result = await this.p2p.askBinary<
               RequestReceiptForTxReqSerialized,
               RequestReceiptForTxRespSerialized
@@ -3889,20 +3994,28 @@ class TransactionQueue {
   async broadcastState(
     nodes: Shardus.Node[],
     message: { stateList: Shardus.WrappedResponse[]; txid: string },
-    context: string 
+    context: string
   ): Promise<void> {
     if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.broadcastStateBinary) {
       // convert legacy message to binary supported type
-      const request = message as BroadcastStateReq  
+      const request = message as BroadcastStateReq
       if (logFlags.seqdiagram) {
-        for (const node of nodes) {                        
-          if (context == "tellCorrespondingNodes") {
-            this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_state_nodes'}`)
+        for (const node of nodes) {
+          if (context == 'tellCorrespondingNodes') {
+            this.seqLogger.info(
+              `0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(
+                Self.id
+              )}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_state_nodes'}`
+            )
           } else {
-            this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_state_neighbour'}`)
-          }        
+            this.seqLogger.info(
+              `0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(
+                Self.id
+              )}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_state_neighbour'}`
+            )
+          }
         }
-      }          
+      }
       this.p2p.tellBinary<BroadcastStateReq>(
         nodes,
         InternalRouteEnum.binary_broadcast_state,
@@ -4178,7 +4291,7 @@ class TransactionQueue {
               }
               const filterdCorrespondingAccNodes = filteredNodes
 
-              this.broadcastState(filterdCorrespondingAccNodes, message, "tellCorrespondingNodes")
+              this.broadcastState(filterdCorrespondingAccNodes, message, 'tellCorrespondingNodes')
             }
           }
         }
@@ -4198,21 +4311,39 @@ class TransactionQueue {
 
     const senderHasAddress = ShardFunctions.testAddressInRange(dataKey, senderNode.storedPartitions)
 
-    if (configContext.stateManager.shareCompleteData){
+    if (configContext.stateManager.shareCompleteData) {
       const senderIsInExecutionGroup = queueEntry.executionGroupMap.has(senderNodeId)
 
       // check if sender is an execution neighouring node
-      const neighbourNodes = utils.selectNeighbors(queueEntry.executionGroup, queueEntry.ourExGroupIndex, 2) as Shardus.Node[]
+      const neighbourNodes = utils.selectNeighbors(
+        queueEntry.executionGroup,
+        queueEntry.ourExGroupIndex,
+        2
+      ) as Shardus.Node[]
       const neighbourNodeIds = neighbourNodes.map((node) => node.id)
       if (senderIsInExecutionGroup && neighbourNodeIds.includes(senderNodeId) === false) {
-        this.mainLogger.error(`validateCorrespondingTellSender: sender is an execution node but not a neighbour node`)
+        this.mainLogger.error(
+          `validateCorrespondingTellSender: sender is an execution node but not a neighbour node`
+        )
         return false
       }
-      if (senderIsInExecutionGroup) nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is an execution node')
-      else nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is not an execution node')
+      if (senderIsInExecutionGroup)
+        nestedCountersInstance.countEvent(
+          'stateManager',
+          'validateCorrespondingTellSender: sender is an execution node'
+        )
+      else
+        nestedCountersInstance.countEvent(
+          'stateManager',
+          'validateCorrespondingTellSender: sender is not an execution node'
+        )
 
       /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`validateCorrespondingTellSender: data key: ${dataKey} sender node id: ${senderNodeId} senderHasAddress: ${senderHasAddress} receiverIsInExecutionGroup: ${receiverIsInExecutionGroup} senderIsInExecutionGroup: ${senderIsInExecutionGroup}`)
-      if (receiverIsInExecutionGroup === true || senderHasAddress === true || senderIsInExecutionGroup === true) {
+      if (
+        receiverIsInExecutionGroup === true ||
+        senderHasAddress === true ||
+        senderIsInExecutionGroup === true
+      ) {
         return true
       }
     } else {
@@ -4422,11 +4553,15 @@ class TransactionQueue {
             // convert legacy message to binary supported type
             const request = message as BroadcastFinalStateReq
             if (logFlags.seqdiagram) {
-              for (const node of filterdCorrespondingAccNodes) {                
-                this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_finalstate'}`)
+              for (const node of filterdCorrespondingAccNodes) {
+                this.seqLogger.info(
+                  `0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(
+                    Self.id
+                  )}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_finalstate'}`
+                )
               }
             }
-            
+
             this.p2p.tellBinary<BroadcastFinalStateReq>(
               filterdCorrespondingAccNodes,
               InternalRouteEnum.binary_broadcast_finalstate,
@@ -4547,7 +4682,12 @@ class TransactionQueue {
    */
   removeFromQueue(queueEntry: QueueEntry, currentIndex: number, archive = true): void {
     // end all the pending txDebug timers
-    if (logFlags.seqdiagram) this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: removed`)
+    if (logFlags.seqdiagram)
+      this.seqLogger.info(
+        `0x53455104 ${shardusGetTime()} tx:${
+          queueEntry.acceptedTx.txId
+        } Note over ${NodeList.activeIdToPartition.get(Self.id)}: removed`
+      )
     for (const key in queueEntry.txDebug.startTime) {
       if (queueEntry.txDebug.startTime[key] != null) {
         this.txDebugMarkEndTime(queueEntry, key)
@@ -4560,7 +4700,7 @@ class TransactionQueue {
     this._transactionQueueByID.delete(queueEntry.acceptedTx.txId)
 
     if (archive === false) {
-      if (logFlags.debug) this.mainLogger.debug(`removeFromQueue: ${queueEntry.logID} done. No archive`);
+      if (logFlags.debug) this.mainLogger.debug(`removeFromQueue: ${queueEntry.logID} done. No archive`)
       return
     }
 
@@ -4602,7 +4742,8 @@ class TransactionQueue {
       this.archivedQueueEntriesByID.delete(this.archivedQueueEntries[0].acceptedTx.txId)
       this.archivedQueueEntries.shift()
     }
-    if (logFlags.debug) this.mainLogger.debug(`removeFromQueue: ${queueEntry.logID} and added to archive done`);
+    if (logFlags.debug)
+      this.mainLogger.debug(`removeFromQueue: ${queueEntry.logID} and added to archive done`)
   }
 
   /***
@@ -4623,7 +4764,7 @@ class TransactionQueue {
   async processTransactions(firstTime = false): Promise<void> {
     const seenAccounts: SeenAccounts = {}
     let pushedProfilerTag = null
-    const startTime = shardusGetTime()        
+    const startTime = shardusGetTime()
 
     const processStats: ProcessQueueStats = {
       totalTime: 0,
@@ -4681,7 +4822,14 @@ class TransactionQueue {
 
       this.profiler.profileSectionStart('processQ')
 
-      if (logFlags.seqdiagram) this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x0000 processTransactions _transactionQueue.length ${this._transactionQueue.length}`)
+      if (logFlags.seqdiagram)
+        this.mainLogger.info(
+          `0x10052024 ${
+            ipInfo.externalIp
+          } ${shardusGetTime()} 0x0000 processTransactions _transactionQueue.length ${
+            this._transactionQueue.length
+          }`
+        )
 
       if (this.stateManager.currentCycleShardData == null) {
         nestedCountersInstance.countEvent('stateManager', 'currentCycleShardData == null early exit')
@@ -4750,7 +4898,7 @@ class TransactionQueue {
             /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('shrd_processAcceptedTxQueueTooOld2', `${utils.makeShortHash(txQueueEntry.acceptedTx.txId)}`, 'processAcceptedTxQueue working on older tx ' + timestamp + ' age: ' + age)
             nestedCountersInstance.countEvent('processing', 'txExpired1 > M. waitForReceiptOnly')
             txQueueEntry.waitForReceiptOnly = true
-            if(this.config.stateManager.txStateMachineChanges){
+            if (this.config.stateManager.txStateMachineChanges) {
               this.updateTxState(txQueueEntry, 'await final data', 'processTx1')
             } else {
               this.updateTxState(txQueueEntry, 'consensing')
@@ -4787,7 +4935,12 @@ class TransactionQueue {
           this._transactionQueue.splice(index + 1, 0, txQueueEntry)
           this._transactionQueueByID.set(txQueueEntry.acceptedTx.txId, txQueueEntry)
 
-          if (logFlags.seqdiagram) this.seqLogger.info(`0x53455105 ${shardusGetTime()} tx:${txQueueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: aging`)
+          if (logFlags.seqdiagram)
+            this.seqLogger.info(
+              `0x53455105 ${shardusGetTime()} tx:${
+                txQueueEntry.acceptedTx.txId
+              } Note over ${NodeList.activeIdToPartition.get(Self.id)}: aging`
+            )
 
           processStats.inserted++
 
@@ -4845,7 +4998,12 @@ class TransactionQueue {
 
         // eslint-disable-next-line security/detect-object-injection
         const queueEntry: QueueEntry = this._transactionQueue[currentIndex]
-        if (logFlags.seqdiagram)  this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x0001 currentIndex:${currentIndex} txId:${queueEntry.acceptedTx.txId} state:${queueEntry.state}`)
+        if (logFlags.seqdiagram)
+          this.mainLogger.info(
+            `0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x0001 currentIndex:${currentIndex} txId:${
+              queueEntry.acceptedTx.txId
+            } state:${queueEntry.state}`
+          )
         const txTime = queueEntry.txKeys.timestamp
         const txAge = currentTime - txTime
 
@@ -5016,7 +5174,7 @@ class TransactionQueue {
                       queueEntry.waitForReceiptOnly = true
                       queueEntry.m2TimeoutReached = true
 
-                      if(this.config.stateManager.txStateMachineChanges){
+                      if (this.config.stateManager.txStateMachineChanges) {
                         this.updateTxState(queueEntry, 'await final data', 'processTx2')
                       } else {
                         this.updateTxState(queueEntry, 'consensing')
@@ -5054,7 +5212,7 @@ class TransactionQueue {
                     queueEntry.waitForReceiptOnly = true
                     queueEntry.m2TimeoutReached = true
 
-                    if(this.config.stateManager.txStateMachineChanges){
+                    if (this.config.stateManager.txStateMachineChanges) {
                       this.updateTxState(queueEntry, 'await final data', 'processTx3')
                     } else {
                       this.updateTxState(queueEntry, 'consensing')
@@ -5108,9 +5266,15 @@ class TransactionQueue {
           const hasSeenConfirmation = queueEntry.receivedBestConfirmation != null
 
           // remove TXs that are stuck in the processing queue for 2 min
-          if (configContext.stateManager.removeStuckTxsFromQueue === true && txAge > configContext.stateManager.stuckTxRemoveTime) {
+          if (
+            configContext.stateManager.removeStuckTxsFromQueue === true &&
+            txAge > configContext.stateManager.stuckTxRemoveTime
+          ) {
             nestedCountersInstance.countEvent('txSafelyRemoved', `txAge > 2m`)
-            this.statemanager_fatal(`txSafelyRemoved`, `txAge > 2m txid: ${shortID} state: ${queueEntry.state} age:${txAge}`)
+            this.statemanager_fatal(
+              `txSafelyRemoved`,
+              `txAge > 2m txid: ${shortID} state: ${queueEntry.state} age:${txAge}`
+            )
             this.removeFromQueue(queueEntry, currentIndex)
             continue
           }
@@ -5120,16 +5284,18 @@ class TransactionQueue {
             // maybe we missed the spread_appliedReceipt2 gossip, go to await final data if we have a confirmation
             // we will request the final data (and probably receipt2)
             if (configContext.stateManager.disableTxExpiration && hasSeenVote) {
-              nestedCountersInstance.countEvent('txExpired', `> timeM3 + confirmSeenExpirationTime state: ${queueEntry.state} hasSeenVote: ${hasSeenVote} hasSeenConfirmation: ${hasSeenConfirmation} waitForReceiptOnly: ${queueEntry.waitForReceiptOnly}`)
-              if(this.config.stateManager.txStateMachineChanges){
+              nestedCountersInstance.countEvent(
+                'txExpired',
+                `> timeM3 + confirmSeenExpirationTime state: ${queueEntry.state} hasSeenVote: ${hasSeenVote} hasSeenConfirmation: ${hasSeenConfirmation} waitForReceiptOnly: ${queueEntry.waitForReceiptOnly}`
+              )
+              if (this.config.stateManager.txStateMachineChanges) {
                 if (configContext.stateManager.stuckTxQueueFix) {
                   // make sure we are not resetting the state and causing state start timestamp to be updated repeatedly
-                  if (queueEntry.state !== 'await final data' && queueEntry.state !== 'await repair') this.updateTxState(queueEntry, 'await' +
-                    ' final data')
+                  if (queueEntry.state !== 'await final data' && queueEntry.state !== 'await repair')
+                    this.updateTxState(queueEntry, 'await' + ' final data')
                 } else {
                   this.updateTxState(queueEntry, 'await final data', 'processTx4')
                 }
-
               } else {
                 this.updateTxState(queueEntry, 'consensing')
               }
@@ -5142,32 +5308,58 @@ class TransactionQueue {
           } else if (txAge > timeM3 + configContext.stateManager.confirmationSeenExpirationTime) {
             let shouldExpire = true
             if (queueEntry.hasRobustConfirmation && queueEntry.isInExecutionHome) {
-              nestedCountersInstance.countEvent('txExpired', `> timeM3 + confirmSeenExpirationTime but hasRobustConfirmation = true, not expiring`)
+              nestedCountersInstance.countEvent(
+                'txExpired',
+                `> timeM3 + confirmSeenExpirationTime but hasRobustConfirmation = true, not expiring`
+              )
               shouldExpire = false
             }
             if (shouldExpire && configContext.stateManager.disableTxExpiration === false) {
-              nestedCountersInstance.countEvent('txExpired', `> timeM3 + confirmSeenExpirationTime hasRobustConfirmation: ${queueEntry.hasRobustConfirmation}`)
-              this.setTXExpired(queueEntry, currentIndex, 'txAge > timeM3 + confirmSeenExpirationTime general case has' +
-                ' vote and robust confirmation but fail' +
-                ' to' +
-                ' commit the tx')
+              nestedCountersInstance.countEvent(
+                'txExpired',
+                `> timeM3 + confirmSeenExpirationTime hasRobustConfirmation: ${queueEntry.hasRobustConfirmation}`
+              )
+              this.setTXExpired(
+                queueEntry,
+                currentIndex,
+                'txAge > timeM3 + confirmSeenExpirationTime general case has' +
+                  ' vote and robust confirmation but fail' +
+                  ' to' +
+                  ' commit the tx'
+              )
               continue
             }
-          } else if (txAge > timeM3 + configContext.stateManager.voteSeenExpirationTime && hasSeenVote && !hasSeenConfirmation) {
+          } else if (
+            txAge > timeM3 + configContext.stateManager.voteSeenExpirationTime &&
+            hasSeenVote &&
+            !hasSeenConfirmation
+          ) {
             if (configContext.stateManager.disableTxExpiration === false) {
               nestedCountersInstance.countEvent('txExpired', `> timeM3 + voteSeenExpirationTime`)
-              this.mainLogger.error(`${queueEntry.logID} txAge > timeM3 + voteSeenExpirationTime general case has vote but fail to generate receipt`)
-              this.setTXExpired(queueEntry, currentIndex, 'txAge > timeM3 + voteSeenExpirationTime general case has vote but fail' +
-                ' to' +
-                ' commit the tx')
+              this.mainLogger.error(
+                `${queueEntry.logID} txAge > timeM3 + voteSeenExpirationTime general case has vote but fail to generate receipt`
+              )
+              this.setTXExpired(
+                queueEntry,
+                currentIndex,
+                'txAge > timeM3 + voteSeenExpirationTime general case has vote but fail' +
+                  ' to' +
+                  ' commit the tx'
+              )
               continue
             }
           } else if (txAge > timeM3 + configContext.stateManager.noVoteSeenExpirationTime && !hasSeenVote) {
             // seen no vote but past timeM3 + noVoteSeenExpirationTime
             nestedCountersInstance.countEvent('txExpired', `> timeM3 + noVoteSeenExpirationTime`)
-            this.mainLogger.error(`${queueEntry.logID} txAge > timeM3 + noVoteSeenExpirationTime general case. no vote seen`)
+            this.mainLogger.error(
+              `${queueEntry.logID} txAge > timeM3 + noVoteSeenExpirationTime general case. no vote seen`
+            )
             if (configContext.stateManager.disableTxExpiration === false) {
-              this.setTXExpired(queueEntry, currentIndex, 'txAge > timeM3 + noVoteSeenExpirationTime general case. no vote seen')
+              this.setTXExpired(
+                queueEntry,
+                currentIndex,
+                'txAge > timeM3 + noVoteSeenExpirationTime general case. no vote seen'
+              )
               continue
             }
           }
@@ -5261,14 +5453,23 @@ class TransactionQueue {
           }
 
           // Have a hard cap where we ALMOST expire but NOT remove TXs from queue after time > M3
-          if (txAge > timeM3 + extraTime && queueEntry.isInExecutionHome && queueEntry.almostExpired == null && configContext.stateManager.disableTxExpiration === false) {
+          if (
+            txAge > timeM3 + extraTime &&
+            queueEntry.isInExecutionHome &&
+            queueEntry.almostExpired == null &&
+            configContext.stateManager.disableTxExpiration === false
+          ) {
             const hasVoted = queueEntry.ourVote != null
             const receivedVote = queueEntry.receivedBestVote != null
             if (!receivedVote && !hasVoted && queueEntry.almostExpired == null) {
               this.statemanager_fatal(
                 `setTxAlmostExpired > M3. general case`,
                 `setTxAlmostExpired txAge > timeM3 general case ` +
-                `txid: ${shortID} state: ${queueEntry.state} hasAll:${queueEntry.hasAll} applyReceipt:${hasApplyReceipt} recievedAppliedReceipt:${hasReceivedApplyReceipt} age:${txAge}  hasReceipt:${hasReceipt} matchingReceipt:${matchingReceipt} isInExecutionHome:${isInExecutionHome} hasVote: ${queueEntry.receivedBestVote != null}`
+                  `txid: ${shortID} state: ${queueEntry.state} hasAll:${
+                    queueEntry.hasAll
+                  } applyReceipt:${hasApplyReceipt} recievedAppliedReceipt:${hasReceivedApplyReceipt} age:${txAge}  hasReceipt:${hasReceipt} matchingReceipt:${matchingReceipt} isInExecutionHome:${isInExecutionHome} hasVote: ${
+                    queueEntry.receivedBestVote != null
+                  }`
               )
               /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('txExpired', `${shortID}`, `setTxAlmostExpired ${queueEntry.txGroupDebug} txExpired 3 requestingReceiptFailed  ${utils.stringifyReduce(queueEntry.acceptedTx)} ${queueEntry.didWakeup}`)
               //if (logFlags.playback) this.logger.playbackLogNote('txExpired', `${shortID}`, `${queueEntry.txGroupDebug} queueEntry.recievedAppliedReceipt 3 requestingReceiptFailed: ${utils.stringifyReduce(queueEntry.recievedAppliedReceipt)}`)
@@ -5276,11 +5477,15 @@ class TransactionQueue {
               /* prettier-ignore */ nestedCountersInstance.countEvent('txExpired', `setTxAlmostExpired > M3. general case state:${queueEntry.state} hasAll:${queueEntry.hasAll} globalMod:${queueEntry.globalModification} hasReceipt:${hasReceipt} matchingReceipt:${matchingReceipt} isInExecutionHome:${isInExecutionHome} hasVote: ${queueEntry.receivedBestVote != null}`)
               /* prettier-ignore */ nestedCountersInstance.countEvent('txExpired', `setTxAlmostExpired > M3. general case sieveT:${queueEntry.txSieveTime} extraTime:${extraTime}`)
 
-              nestedCountersInstance.countEvent('txExpired', 'set to almostExpired because we have not voted' +
-                ' or received' +
-                ' a' +
-                ' vote')
-              this.setTxAlmostExpired(queueEntry, currentIndex, 'm3 general: almostExpired not voted or received vote')
+              nestedCountersInstance.countEvent(
+                'txExpired',
+                'set to almostExpired because we have not voted' + ' or received' + ' a' + ' vote'
+              )
+              this.setTxAlmostExpired(
+                queueEntry,
+                currentIndex,
+                'm3 general: almostExpired not voted or received vote'
+              )
             }
             // continue
           }
@@ -5314,11 +5519,11 @@ class TransactionQueue {
               queueEntry.waitForReceiptOnly = true
 
               // old logic changed state here (seen commented out in the new mode)
-              if(this.config.stateManager.txStateMachineChanges){
+              if (this.config.stateManager.txStateMachineChanges) {
                 // this.updateTxState(queueEntry, 'await final data')
               } else {
                 this.updateTxState(queueEntry, 'await final data', 'processTx5')
-              } 
+              }
             }
 
             this.processQueue_markAccountsSeen(seenAccounts, queueEntry)
@@ -5357,7 +5562,8 @@ class TransactionQueue {
                   /* prettier-ignore */ this.setDebugLastAwaitedCall('this.stateManager.transactionQueue.tellCorrespondingNodesOld(queueEntry)', DebugComplete.Completed)
                 }
                 queueEntry.dataSharedTimestamp = shardusGetTime()
-                if (logFlags.debug) /* prettier-ignore */ this.mainLogger.debug(`tellCorrespondingNodes: ${queueEntry.logID} dataSharedTimestamp: ${queueEntry.dataSharedTimestamp}`)
+                if (logFlags.debug)
+                  /* prettier-ignore */ this.mainLogger.debug(`tellCorrespondingNodes: ${queueEntry.logID} dataSharedTimestamp: ${queueEntry.dataSharedTimestamp}`)
 
                 this.updateSimpleStatsObject(
                   processStats.awaitStats,
@@ -5400,13 +5606,21 @@ class TransactionQueue {
             } else {
               const upstreamTx = this.processQueue_getUpstreamTx(seenAccounts, queueEntry)
               if (upstreamTx == null) {
-                nestedCountersInstance.countEvent('processing', 'busy waiting the upstream tx.' +
-                  ' but it is null')
+                nestedCountersInstance.countEvent(
+                  'processing',
+                  'busy waiting the upstream tx.' + ' but it is null'
+                )
               } else {
                 if (upstreamTx.logID === queueEntry.logID) {
-                  nestedCountersInstance.countEvent('processing', 'busy waiting the upstream tx but it is same txId')
+                  nestedCountersInstance.countEvent(
+                    'processing',
+                    'busy waiting the upstream tx but it is same txId'
+                  )
                 } else {
-                  nestedCountersInstance.countEvent('processing', `busy waiting the upstream tx to complete. state ${queueEntry.state}`)
+                  nestedCountersInstance.countEvent(
+                    'processing',
+                    `busy waiting the upstream tx to complete. state ${queueEntry.state}`
+                  )
                 }
               }
             }
@@ -5452,7 +5666,7 @@ class TransactionQueue {
 
                 queueEntry.waitForReceiptOnly = true
 
-                if(this.config.stateManager.txStateMachineChanges){
+                if (this.config.stateManager.txStateMachineChanges) {
                   this.updateTxState(queueEntry, 'await final data', 'processTx6')
                 } else {
                   this.updateTxState(queueEntry, 'consensing')
@@ -5684,13 +5898,21 @@ class TransactionQueue {
               if (this.useNewPOQ) {
                 this.stateManager.transactionConsensus.confirmOrChallenge(queueEntry)
 
-                if (queueEntry.pendingConfirmOrChallenge.size > 0 && queueEntry.robustQueryVoteCompleted === true && queueEntry.acceptVoteMessage === false) {
-                  this.mainLogger.debug(`processAcceptedTxQueue2 consensing : ${queueEntry.logID} pendingConfirmOrChallenge.size = ${queueEntry.pendingConfirmOrChallenge.size}`)
+                if (
+                  queueEntry.pendingConfirmOrChallenge.size > 0 &&
+                  queueEntry.robustQueryVoteCompleted === true &&
+                  queueEntry.acceptVoteMessage === false
+                ) {
+                  this.mainLogger.debug(
+                    `processAcceptedTxQueue2 consensing : ${queueEntry.logID} pendingConfirmOrChallenge.size = ${queueEntry.pendingConfirmOrChallenge.size}`
+                  )
                   for (const [nodeId, confirmOrChallenge] of queueEntry.pendingConfirmOrChallenge) {
                     this.stateManager.transactionConsensus.tryAppendMessage(queueEntry, confirmOrChallenge)
                   }
                   queueEntry.pendingConfirmOrChallenge = new Map()
-                  this.mainLogger.debug(`processAcceptedTxQueue2 consensing : ${queueEntry.logID} reset pendingConfirmOrChallenge.size = ${queueEntry.pendingConfirmOrChallenge.size}`)
+                  this.mainLogger.debug(
+                    `processAcceptedTxQueue2 consensing : ${queueEntry.logID} reset pendingConfirmOrChallenge.size = ${queueEntry.pendingConfirmOrChallenge.size}`
+                  )
                 }
 
                 // try to produce a receipt
@@ -5765,8 +5987,11 @@ class TransactionQueue {
                 let shouldSendReceipt = false
                 if (queueEntry.isInExecutionHome) {
                   let numberOfSharingNodes = configContext.stateManager.nodesToGossipAppliedReceipt
-                  if (numberOfSharingNodes > queueEntry.executionGroup.length) numberOfSharingNodes = queueEntry.executionGroup.length
-                  const highestRankedNodeIds = queueEntry.executionGroup.slice(0, numberOfSharingNodes).map(n => n.id)
+                  if (numberOfSharingNodes > queueEntry.executionGroup.length)
+                    numberOfSharingNodes = queueEntry.executionGroup.length
+                  const highestRankedNodeIds = queueEntry.executionGroup
+                    .slice(0, numberOfSharingNodes)
+                    .map((n) => n.id)
                   if (highestRankedNodeIds.includes(Self.id)) {
                     if (isChallengedReceipt) shouldSendReceipt = true
                     else if (isConfirmedReceipt && isReceiptMatchPreApply) shouldSendReceipt = true
@@ -5792,8 +6017,13 @@ class TransactionQueue {
                   const logID = queueEntry.logID
                   this.updateTxState(queueEntry, 'fail')
                   this.removeFromQueue(queueEntry, currentIndex, true) // we don't want to archive this
-                  nestedCountersInstance.countEvent('consensus', 'isChallengedReceipt: true removing from queue')
-                  this.mainLogger.debug(`processAcceptedTxQueue2 tryProduceReceipt isChallengedReceipt : ${logID}. remove from queue`)
+                  nestedCountersInstance.countEvent(
+                    'consensus',
+                    'isChallengedReceipt: true removing from queue'
+                  )
+                  this.mainLogger.debug(
+                    `processAcceptedTxQueue2 tryProduceReceipt isChallengedReceipt : ${logID}. remove from queue`
+                  )
 
                   // these are only for debugging
 
@@ -6022,7 +6252,10 @@ class TransactionQueue {
 
               // remove from queue if we have commited data for this tx
               if (configContext.stateManager.attachDataToReceipt && queueEntry.accountDataSet === true) {
-                if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_removeFromQueue : ${queueEntry.logID} because accountDataSet is true`)
+                if (logFlags.debug)
+                  this.mainLogger.debug(
+                    `shrd_awaitFinalData_removeFromQueue : ${queueEntry.logID} because accountDataSet is true`
+                  )
                 this.removeFromQueue(queueEntry, currentIndex)
                 //this will possibly skip critical stats or exit steps that invoke a transaction applied event to the dapp
                 continue
@@ -6031,29 +6264,46 @@ class TransactionQueue {
               //collectedFinalData
               //PURPL-74 todo: get the vote from queueEntry.receivedBestVote or receivedBestConfirmation instead of receipt2
               const receipt2 = this.stateManager.getReceipt2(queueEntry)
-              const timeSinceAwaitFinalStart = queueEntry.txDebug.startTimestamp['await final data'] > 0 ? shardusGetTime() - queueEntry.txDebug.startTimestamp['await final data'] : 0
+              const timeSinceAwaitFinalStart =
+                queueEntry.txDebug.startTimestamp['await final data'] > 0
+                  ? shardusGetTime() - queueEntry.txDebug.startTimestamp['await final data']
+                  : 0
               let vote: AppliedVote
 
-              if(configContext.stateManager.removeStuckChallengedTXs){
+              if (configContext.stateManager.removeStuckChallengedTXs) {
                 // first check if this is a challenge receipt
                 if (receipt2 && receipt2.confirmOrChallenge.message === 'challenge') {
-                  if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_challenge : ${queueEntry.logID} challenge from receipt2`)
+                  if (logFlags.debug)
+                    this.mainLogger.debug(
+                      `shrd_awaitFinalData_challenge : ${queueEntry.logID} challenge from receipt2`
+                    )
                   this.updateTxState(queueEntry, 'fail')
                   this.removeFromQueue(queueEntry, currentIndex)
                   continue
-                } if (receipt2 == null && queueEntry.receivedBestChallenge) {
-                  const enoughUniqueChallenges = queueEntry.uniqueChallengesCount >= configContext.stateManager.minRequiredChallenges
+                }
+                if (receipt2 == null && queueEntry.receivedBestChallenge) {
+                  const enoughUniqueChallenges =
+                    queueEntry.uniqueChallengesCount >= configContext.stateManager.minRequiredChallenges
                   if (enoughUniqueChallenges) {
-                    if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_challenge : ${queueEntry.logID} has unique challenges`)
+                    if (logFlags.debug)
+                      this.mainLogger.debug(
+                        `shrd_awaitFinalData_challenge : ${queueEntry.logID} has unique challenges`
+                      )
                     this.updateTxState(queueEntry, 'fail')
                     this.removeFromQueue(queueEntry, currentIndex)
                   } else if (timeSinceAwaitFinalStart > 1000 * 30) {
                     // if we have a challenge and we have waited for a minute, we can fail the tx
-                    if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_challenge : ${queueEntry.logID} not enough but waited long enough`)
+                    if (logFlags.debug)
+                      this.mainLogger.debug(
+                        `shrd_awaitFinalData_challenge : ${queueEntry.logID} not enough but waited long enough`
+                      )
                     this.updateTxState(queueEntry, 'fail')
                     this.removeFromQueue(queueEntry, currentIndex)
                   } else {
-                    if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_challenge : ${queueEntry.logID} not enough challenges but waited ${timeSinceAwaitFinalStart}ms`)
+                    if (logFlags.debug)
+                      this.mainLogger.debug(
+                        `shrd_awaitFinalData_challenge : ${queueEntry.logID} not enough challenges but waited ${timeSinceAwaitFinalStart}ms`
+                      )
                   }
                   continue
                 }
@@ -6110,21 +6360,27 @@ class TransactionQueue {
                 }
 
                 if (incomplete && missingAccounts.length > 0) {
-
                   // start request process for missing data if we waited long enough
                   let shouldStartFinalDataRequest = false
                   if (timeSinceAwaitFinalStart > 5000) {
                     shouldStartFinalDataRequest = true
-                    if (logFlags.verbose) /* prettier-ignore */ this.mainLogger.debug(`shrd_awaitFinalData_incomplete : ${queueEntry.logID} starting finalDataRequest timeSinceDataShare: ${timeSinceAwaitFinalStart}`)
+                    if (logFlags.verbose)
+                      /* prettier-ignore */ this.mainLogger.debug(`shrd_awaitFinalData_incomplete : ${queueEntry.logID} starting finalDataRequest timeSinceDataShare: ${timeSinceAwaitFinalStart}`)
                   } else if (txAge > timeM3) {
                     // by this time we should have all the data we need
                     shouldStartFinalDataRequest = true
-                    if (logFlags.verbose) /* prettier-ignore */ this.mainLogger.debug(`shrd_awaitFinalData_incomplete : ${queueEntry.logID} starting finalDataRequest txAge > timeM3 + confirmationSeenExpirationTime`)
+                    if (logFlags.verbose)
+                      /* prettier-ignore */ this.mainLogger.debug(`shrd_awaitFinalData_incomplete : ${queueEntry.logID} starting finalDataRequest txAge > timeM3 + confirmationSeenExpirationTime`)
                   }
 
                   // start request process for missing data
-                  const timeSinceLastFinalDataRequest = shardusGetTime() - queueEntry.lastFinalDataRequestTimestamp
-                  if (this.config.stateManager.canRequestFinalData && shouldStartFinalDataRequest && timeSinceLastFinalDataRequest > 5000) {
+                  const timeSinceLastFinalDataRequest =
+                    shardusGetTime() - queueEntry.lastFinalDataRequestTimestamp
+                  if (
+                    this.config.stateManager.canRequestFinalData &&
+                    shouldStartFinalDataRequest &&
+                    timeSinceLastFinalDataRequest > 5000
+                  ) {
                     nestedCountersInstance.countEvent('stateManager', 'requestFinalData')
                     this.requestFinalData(queueEntry, missingAccounts)
                     queueEntry.lastFinalDataRequestTimestamp = shardusGetTime()
@@ -6215,12 +6471,21 @@ class TransactionQueue {
               queueEntry.executionDebug.logFinalData = `has all final data, but busy. upstreamTx: ${upstreamTx?.logID}`
               if (upstreamTx == null) {
                 queueEntry.executionDebug.logFinalData = `has all final data, but busy. upstreamTx: null`
-                nestedCountersInstance.countEvent('stateManager', 'shrd_awaitFinalData busy. upstreamTx: null')
+                nestedCountersInstance.countEvent(
+                  'stateManager',
+                  'shrd_awaitFinalData busy. upstreamTx: null'
+                )
               } else {
                 if (upstreamTx.acceptedTx.txId === queueEntry.acceptedTx.txId) {
-                  nestedCountersInstance.countEvent('stateManager', 'shrd_awaitFinalData busy. upstreamTx same tx')
+                  nestedCountersInstance.countEvent(
+                    'stateManager',
+                    'shrd_awaitFinalData busy. upstreamTx same tx'
+                  )
                 } else {
-                  nestedCountersInstance.countEvent('stateManager', `shrd_awaitFinalData busy. upstream tx state: ${upstreamTx?.state}`)
+                  nestedCountersInstance.countEvent(
+                    'stateManager',
+                    `shrd_awaitFinalData busy. upstream tx state: ${upstreamTx?.state}`
+                  )
                 }
               }
             }
@@ -6294,7 +6559,7 @@ class TransactionQueue {
                   // the final state of the queue entry will be pass or fail based on the receipt
                   if (queueEntry.recievedAppliedReceipt2.result === false) {
                     canCommitTX = false
-                    if(configContext.stateManager.receiptRemoveFix){
+                    if (configContext.stateManager.receiptRemoveFix) {
                       hasReceiptFail = true
                     } else {
                       hasReceiptFail = false
@@ -6503,7 +6768,12 @@ class TransactionQueue {
           this.stateManager.tryStartTransactionProcessingQueue()
         }, 15)
       } else {
-        if (logFlags.seqdiagram) this.mainLogger.info(`0x10052024 ${ipInfo.externalIp} ${shardusGetTime()} 0x0000 processTransactions _transactionQueue.length 0`)
+        if (logFlags.seqdiagram)
+          this.mainLogger.info(
+            `0x10052024 ${
+              ipInfo.externalIp
+            } ${shardusGetTime()} 0x0000 processTransactions _transactionQueue.length 0`
+          )
         this.transactionQueueHasRemainingWork = false
       }
 
@@ -6648,7 +6918,9 @@ class TransactionQueue {
 
   async requestFinalData(queueEntry: QueueEntry, accountIds: string[]) {
     profilerInstance.profileSectionStart('requestFinalData')
-    this.mainLogger.debug(`requestFinalData: txid: ${queueEntry.logID} accountIds: ${utils.stringifyReduce(accountIds)}`);
+    this.mainLogger.debug(
+      `requestFinalData: txid: ${queueEntry.logID} accountIds: ${utils.stringifyReduce(accountIds)}`
+    )
     const message = { txid: queueEntry.acceptedTx.txId, accountIds }
     let success = false
     let successCount = 0
@@ -6673,7 +6945,7 @@ class TransactionQueue {
       if (!nodeToAsk) {
         if (logFlags.error)
           this.mainLogger.error('requestFinalData: could not find node from execution group')
-          throw new Error('requestFinalData: could not find node from execution group')
+        throw new Error('requestFinalData: could not find node from execution group')
       }
 
       if (true)
@@ -6686,7 +6958,14 @@ class TransactionQueue {
       let response
       if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.requestTxAndStateBinary) {
         const requestMessage = message as RequestTxAndStateReq
-        if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(nodeToAsk.id)}: ${'request_tx_and_state'}`)
+        if (logFlags.seqdiagram)
+          this.seqLogger.info(
+            `0x53455101 ${shardusGetTime()} tx:${
+              queueEntry.acceptedTx.txId
+            } ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(
+              nodeToAsk.id
+            )}: ${'request_tx_and_state'}`
+          )
         response = await Comms.askBinary<RequestTxAndStateReq, RequestTxAndStateResp>(
           nodeToAsk,
           InternalRouteEnum.binary_request_tx_and_state,
@@ -6698,7 +6977,9 @@ class TransactionQueue {
       } else response = await Comms.ask(nodeToAsk, 'request_tx_and_state', message)
 
       if (response && response.stateList) {
-        this.mainLogger.debug(`requestFinalData: txid: ${queueEntry.logID} received data for ${response.stateList.length} accounts`)
+        this.mainLogger.debug(
+          `requestFinalData: txid: ${queueEntry.logID} received data for ${response.stateList.length} accounts`
+        )
       } else {
         this.mainLogger.error(`requestFinalData: txid: ${queueEntry.logID} response is null`)
       }
@@ -6965,7 +7246,8 @@ class TransactionQueue {
     /* eslint-disable security/detect-object-injection */
     for (const key of queueEntry.uniqueKeys) {
       if (seenAccounts[key] != null && seenAccounts[key].logID === queueEntry.logID) {
-        if (logFlags.verbose) this.mainLogger.debug(`${new Date()}}clearing key ${key} for tx ${queueEntry.logID}`);
+        if (logFlags.verbose)
+          this.mainLogger.debug(`${new Date()}}clearing key ${key} for tx ${queueEntry.logID}`)
         seenAccounts[key] = null
       }
     }
@@ -7268,7 +7550,7 @@ class TransactionQueue {
         }
         const rw = memoryPatterns?.rw
         const wo = memoryPatterns?.wo
-        if (rw && rw.includes(accountID) || wo && wo.includes(accountID)) {
+        if ((rw && rw.includes(accountID)) || (wo && wo.includes(accountID))) {
           /* prettier-ignore */ if (logFlags.verbose) console.log( 'isAccountInQueue: found upstream tx in the' +
             ' injested' +
             ' queue:' )
@@ -7289,7 +7571,7 @@ class TransactionQueue {
         }
         const rw = memoryPatterns?.rw
         const wo = memoryPatterns?.wo
-        if (rw && rw.includes(accountID) || wo && wo.includes(accountID)) {
+        if ((rw && rw.includes(accountID)) || (wo && wo.includes(accountID))) {
           /* prettier-ignore */ if (logFlags.verbose) console.log( 'isAccountInQueue: found upstream tx in the' +
             ' newAccepted' +
             ' queue:' )
@@ -7519,7 +7801,7 @@ class TransactionQueue {
         waitForReceiptOnly: queueEntry.waitForReceiptOnly,
         ourVote: queueEntry.ourVote || null,
         receipt2: this.stateManager.getReceipt2(queueEntry) || null,
-        uniqueChallenges: queueEntry.uniqueChallengesCount
+        uniqueChallenges: queueEntry.uniqueChallengesCount,
       }
     })
   }
@@ -7533,11 +7815,21 @@ class TransactionQueue {
     if (this.archivedQueueEntriesByID.has(txId)) delete this.archivedQueueEntriesByID[txId]
   }
   updateTxState(queueEntry: QueueEntry, nextState: string, context = ''): void {
-    if (logFlags.seqdiagram) 
+    if (logFlags.seqdiagram)
       if (context == '')
-        this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: ${queueEntry.state}-${nextState}`)
-      else 
-        this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: ${queueEntry.state}-${nextState}:${context}`)
+        this.seqLogger.info(
+          `0x53455104 ${shardusGetTime()} tx:${
+            queueEntry.acceptedTx.txId
+          } Note over ${NodeList.activeIdToPartition.get(Self.id)}: ${queueEntry.state}-${nextState}`
+        )
+      else
+        this.seqLogger.info(
+          `0x53455104 ${shardusGetTime()} tx:${
+            queueEntry.acceptedTx.txId
+          } Note over ${NodeList.activeIdToPartition.get(Self.id)}: ${
+            queueEntry.state
+          }-${nextState}:${context}`
+        )
     const currentState = queueEntry.state
     this.txDebugMarkEndTime(queueEntry, currentState)
     queueEntry.state = nextState
