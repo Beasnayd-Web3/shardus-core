@@ -694,8 +694,6 @@ const gossipStandbyRefresh: P2P.P2PTypes.GossipHandler<
       return
     }
 
-    //if (logFlags.p2pNonFatal) info(`Got scale request: ${JSON.stringify(payload)}`)
-
     const added = addStandbyRefresh(payload)
     /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `standby-refresh validation success: ${added.success}`)
     /* prettier-ignore */ if (logFlags.verbose) console.log(`standby-refresh validation success: ${added.success}`)
