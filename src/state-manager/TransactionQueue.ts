@@ -1277,9 +1277,18 @@ class TransactionQueue {
       this.profiler.profileSectionStart('process-dapp.apply')
       this.profiler.scopedProfileSectionStart('apply_duration')
 
-      /* prettier-ignore */ this.setDebugLastAwaitedCallInner('stateManager.transactionQueue.app.apply(tx)')
-      applyResponse = await this.app.apply(tx as Shardus.OpaqueTransaction, wrappedStates, appData)
-      /* prettier-ignore */ this.setDebugLastAwaitedCallInner('stateManager.transactionQueue.app.apply(tx)', DebugComplete.Completed)
+      if (configContext.stateManager.useCopiedWrappedStateForApply === true) {
+        // deep copy the wrappedStates so that the app can't mess with them when we later share coplete data to neighbors
+        const deepCopyWrappedStates = utils.deepCopy(wrappedStates)
+        /* prettier-ignore */ this.setDebugLastAwaitedCallInner('stateManager.transactionQueue.app.apply(tx)')
+        applyResponse = await this.app.apply(tx as Shardus.OpaqueTransaction, deepCopyWrappedStates, appData)
+        /* prettier-ignore */ this.setDebugLastAwaitedCallInner('stateManager.transactionQueue.app.apply(tx)', DebugComplete.Completed)
+      } else {
+        /* prettier-ignore */ this.setDebugLastAwaitedCallInner('stateManager.transactionQueue.app.apply(tx)')
+        applyResponse = await this.app.apply(tx as Shardus.OpaqueTransaction, wrappedStates, appData)
+        /* prettier-ignore */ this.setDebugLastAwaitedCallInner('stateManager.transactionQueue.app.apply(tx)', DebugComplete.Completed)
+      }
+
       this.profiler.scopedProfileSectionEnd('apply_duration')
       this.profiler.profileSectionEnd('process-dapp.apply')
       if (applyResponse == null) {
@@ -1931,6 +1940,7 @@ class TransactionQueue {
         pendingDataRequest: false,
         queryingFinalData: false,
         lastFinalDataRequestTimestamp: 0,
+        finalDataRequestCount: 0,
         newVotes: false,
         fromClient: sendGossip,
         gossipedReceipt: false,
@@ -1939,6 +1949,7 @@ class TransactionQueue {
         completedConfirmedOrChallenge: false,
         uniqueChallengesCount: 0,
         uniqueChallenges: {},
+        bestKeptChallenges: [],
         archived: false,
         ourTXGroupIndex: -1,
         ourExGroupIndex: -1,
@@ -2550,6 +2561,7 @@ class TransactionQueue {
       )
     }
     if (queueEntry.collectedData[data.accountId] != null) {
+      if (logFlags.verbose) this.mainLogger.debug(`queueEntryAddData: data already collected for txId ${queueEntry.logID} ${queueEntry.acceptedTx.txId} at timestamp: ${shardusGetTime()} data: ${utils.stringify(data)}`)
       // we have already collected this data
       return
     }
@@ -2599,7 +2611,7 @@ class TransactionQueue {
       if (queueEntry.executionGroup && queueEntry.executionGroup.length > 1) this.shareCompleteDataToNeighbours(queueEntry)
       if (logFlags.debug || this.stateManager.consensusLog) {
         this.mainLogger.debug(
-          `queueEntryAddData hasAll: true for txId ${queueEntry.logID} ${queueEntry.acceptedTx.txId} at timestamp: ${shardusGetTime()} nodeId: ${Self.id}`
+          `queueEntryAddData hasAll: true for txId ${queueEntry.logID} ${queueEntry.acceptedTx.txId} at timestamp: ${shardusGetTime()} nodeId: ${Self.id}, data: ${utils.stringify(queueEntry.collectedData)}`
         )
       }
     }
@@ -2623,6 +2635,11 @@ class TransactionQueue {
     if (queueEntry.isInExecutionHome === false) {
       return
     }
+    // do not share again if we have shared via tellCorresponding
+    if (queueEntry.dataSharedTimestamp > 0) {
+      if (logFlags.verbose) this.mainLogger.debug(`shareCompleteDataToNeighbours: already shared data for txId ${queueEntry.logID} through tellCorresponding at timestamp: ${queueEntry.dataSharedTimestamp}`)
+      return
+    }
     const dataToShare: WrappedResponses = {}
     const stateList: Shardus.WrappedResponse[] = []
     for (const accountId in queueEntry.collectedData) {
@@ -2638,6 +2655,7 @@ class TransactionQueue {
     }
     const payload = {txid: queueEntry.acceptedTx.txId, stateList}
     const neighboursNodes = utils.selectNeighbors(queueEntry.executionGroup, queueEntry.ourExGroupIndex, 2)
+    if (logFlags.verbose) this.mainLogger.debug(`shareCompleteDataToNeighbours complete data for txId ${queueEntry.logID} ourNodeId: ${Self.id} OurExeIndex: ${queueEntry.ourExGroupIndex} neighbours: ${JSON.stringify(neighboursNodes.map((node) => node.id))}, ${utils.stringify(payload)}`);
     if (stateList.length > 0) {
       this.broadcastState(neighboursNodes, payload, "shareCompleteDataToNeighbours")
 
@@ -4194,7 +4212,7 @@ class TransactionQueue {
   }
 
   validateCorrespondingTellSender(queueEntry: QueueEntry, dataKey: string, senderNodeId: string): boolean {
-    /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`validateCorrespondingTellSender: data key: ${dataKey} sender node id: ${senderNodeId}`)
+    /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`validateCorrespondingTellSender: ${queueEntry.logID} data key: ${dataKey} sender node id: ${senderNodeId}`)
     const receiverNode = this.stateManager.currentCycleShardData.nodeShardData
     if (receiverNode == null) return false
 
@@ -4205,21 +4223,20 @@ class TransactionQueue {
 
     const senderHasAddress = ShardFunctions.testAddressInRange(dataKey, senderNode.storedPartitions)
 
-    if (configContext.stateManager.shareCompleteData){
+    if (configContext.stateManager.shareCompleteData) {
       const senderIsInExecutionGroup = queueEntry.executionGroupMap.has(senderNodeId)
+      const senderExecutionIndex = queueEntry.executionGroup.findIndex((node) => node.id === senderNodeId)
 
-      // check if sender is an execution neighouring node
+      // check if sender is an execution neighouring node if it does not have the address
       const neighbourNodes = utils.selectNeighbors(queueEntry.executionGroup, queueEntry.ourExGroupIndex, 2) as Shardus.Node[]
       const neighbourNodeIds = neighbourNodes.map((node) => node.id)
-      if (senderIsInExecutionGroup && neighbourNodeIds.includes(senderNodeId) === false) {
-        this.mainLogger.error(`validateCorrespondingTellSender: sender is an execution node but not a neighbour node`)
+      const isSenderOurNeighbour = neighbourNodeIds.includes(senderNodeId)
+      if (senderHasAddress === false && senderIsInExecutionGroup && isSenderOurNeighbour === false) {
+        this.mainLogger.error(`validateCorrespondingTellSender: ${queueEntry.logID} sender ${senderNodeId} ${senderExecutionIndex} does not cover this account, is an execution node but not a neighbour node. Our index: ${queueEntry.ourExGroupIndex}`)
         return false
       }
-      if (senderIsInExecutionGroup) nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is an execution node')
-      else nestedCountersInstance.countEvent('stateManager', 'validateCorrespondingTellSender: sender is not an execution node')
-
       /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`validateCorrespondingTellSender: data key: ${dataKey} sender node id: ${senderNodeId} senderHasAddress: ${senderHasAddress} receiverIsInExecutionGroup: ${receiverIsInExecutionGroup} senderIsInExecutionGroup: ${senderIsInExecutionGroup}`)
-      if (receiverIsInExecutionGroup === true || senderHasAddress === true || senderIsInExecutionGroup === true) {
+      if (receiverIsInExecutionGroup === true || senderHasAddress === true) {
         return true
       }
     } else {
@@ -5111,7 +5128,8 @@ class TransactionQueue {
               }
             }
           }
-          const hasSeenVote = queueEntry.receivedBestVote != null
+          // check  if we seen a vote or has a vote
+          const hasSeenVote = queueEntry.receivedBestVote != null || queueEntry.ourVote != null
           const hasSeenConfirmation = queueEntry.receivedBestConfirmation != null
 
           // remove TXs that are stuck in the processing queue for 2 min
@@ -5593,11 +5611,29 @@ class TransactionQueue {
                     'preApplyTransaction',
                     shardusGetTime() - awaitStart
                   )
+                  if (Math.random() < this.stateManager.applyFailChance) {
+                    this.mainLogger.debug(`processAcceptedTxQueue2 applyFailChance: ${this.stateManager.applyFailChance}`)
+                    nestedCountersInstance.countEvent('processing', 'applyFailChance')
+                    txResult = {
+                      applied: false,
+                      passed: false,
+                      applyResult: '',
+                      reason: 'preApplyTransaction pretest failed, TX rejected due to applyFailChance',
+                    }
+                  }
+                  if (txResult == null) {
+                    txResult = {
+                      applied: false,
+                      passed: false,
+                      applyResult: '',
+                      reason: 'preApplyTransaction returned null',
+                    }
+                  }
 
                   queueEntry.executionDebug.log3 = 'called pre apply'
                   queueEntry.executionDebug.txResult = txResult
 
-                  if (txResult != null && txResult.applied === true) {
+                  if (configContext.stateManager.forceVoteForFailedPreApply || (txResult && txResult.applied === true)) {
                     this.updateTxState(queueEntry, 'consensing')
 
                     queueEntry.preApplyTXResult = txResult
@@ -5697,7 +5733,14 @@ class TransactionQueue {
                 if (queueEntry.pendingConfirmOrChallenge.size > 0 && queueEntry.robustQueryVoteCompleted === true && queueEntry.acceptVoteMessage === false) {
                   this.mainLogger.debug(`processAcceptedTxQueue2 consensing : ${queueEntry.logID} pendingConfirmOrChallenge.size = ${queueEntry.pendingConfirmOrChallenge.size}`)
                   for (const [nodeId, confirmOrChallenge] of queueEntry.pendingConfirmOrChallenge) {
-                    this.stateManager.transactionConsensus.tryAppendMessage(queueEntry, confirmOrChallenge)
+                    const appendSuccessful = this.stateManager.transactionConsensus.tryAppendMessage(queueEntry, confirmOrChallenge)
+                    if (appendSuccessful) {
+                      // forward the message to other nodes
+                      const payload  = confirmOrChallenge
+                      const gossipGroup = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
+                      Comms.sendGossip('spread_confirmOrChallenge', payload, '', null, gossipGroup, false, 10, queueEntry.acceptedTx.txId)
+                      queueEntry.gossipedConfirmOrChallenge = true
+                    }
                   }
                   queueEntry.pendingConfirmOrChallenge = new Map()
                   this.mainLogger.debug(`processAcceptedTxQueue2 consensing : ${queueEntry.logID} reset pendingConfirmOrChallenge.size = ${queueEntry.pendingConfirmOrChallenge.size}`)
@@ -5827,7 +5870,8 @@ class TransactionQueue {
                   //also check if failed votes will work...?
                   if (
                     this.stateManager.getReceiptVote(queueEntry).cant_apply === false &&
-                    this.stateManager.getReceiptResult(queueEntry) === true
+                    this.stateManager.getReceiptResult(queueEntry) === true &&
+                    this.stateManager.getReceiptConfirmation(queueEntry) === true
                   ) {
                     this.updateTxState(queueEntry, 'commiting')
                     queueEntry.hasValidFinalData = true
@@ -5839,7 +5883,8 @@ class TransactionQueue {
                       /* prettier-ignore */ this.mainLogger.debug(`processAcceptedTxQueue2 tryProduceReceipt failed result: false : ${queueEntry.logID} ${utils.stringifyReduce(result)}`)
                       /* prettier-ignore */ this.statemanager_fatal(`processAcceptedTxQueue2`, `tryProduceReceipt failed result: false : ${queueEntry.logID} ${utils.stringifyReduce(result)}`)
                     }
-                    nestedCountersInstance.countEvent('consensus', 'tryProduceReceipt failed result = false')
+                    nestedCountersInstance.countEvent('consensus', 'tryProduceReceipt failed result = false or' +
+                      ' challenged')
                     this.updateTxState(queueEntry, 'fail')
                     this.removeFromQueue(queueEntry, currentIndex)
                     continue
@@ -5884,8 +5929,8 @@ class TransactionQueue {
                       /* prettier-ignore */ this.statemanager_fatal(`processAcceptedTxQueue2`, `tryProduceReceipt failed result: false : ${queueEntry.logID} ${utils.stringifyReduce(result)}`)
                     }
                     nestedCountersInstance.countEvent('consensus', 'consensed on failed result')
-                    this.removeFromQueue(queueEntry, currentIndex)
                     this.updateTxState(queueEntry, 'fail')
+                    this.removeFromQueue(queueEntry, currentIndex)
                     continue
                   }
                   didNotMatchReceipt = true
@@ -6120,6 +6165,16 @@ class TransactionQueue {
                 }
 
                 if (incomplete && missingAccounts.length > 0) {
+                  // mark the tx as fail and remove from queue if we have tried enough times
+                  if (queueEntry.finalDataRequestCount >= configContext.stateManager.maxRetryRequestFinalData) {
+                    /* prettier-ignore */ if (logFlags.verbose) if (logFlags.playback) this.logger.playbackLogNote('shrd_awaitFinalData_incomplete', `${shortID}`, `qId: ${queueEntry.entryID} skipped:${skipped}`)
+                    /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`shrd_awaitFinalData_incomplete : ${queueEntry.logID} queueEntry.awaitFinalDataRetryCount > maxRetryRequestFinalData`)
+                    /* prettier-ignore */ nestedCountersInstance.countEvent('stateManager', 'maxRetryRequestFinalData reached')
+
+                    this.updateTxState(queueEntry, 'fail')
+                    this.removeFromQueue(queueEntry, currentIndex)
+                    continue
+                  }
 
                   // start request process for missing data if we waited long enough
                   let shouldStartFinalDataRequest = false
@@ -6138,6 +6193,7 @@ class TransactionQueue {
                     nestedCountersInstance.countEvent('stateManager', 'requestFinalData')
                     this.requestFinalData(queueEntry, missingAccounts)
                     queueEntry.lastFinalDataRequestTimestamp = shardusGetTime()
+                    queueEntry.finalDataRequestCount += 1
                     continue
                   }
                 }
@@ -6656,7 +6712,7 @@ class TransactionQueue {
     return [...this.forwardedReceiptsByTimestamp.values()]
   }
 
-  async requestFinalData(queueEntry: QueueEntry, accountIds: string[]) {
+  async requestFinalData(queueEntry: QueueEntry, accountIds: string[]): Promise<void> {
     profilerInstance.profileSectionStart('requestFinalData')
     this.mainLogger.debug(`requestFinalData: txid: ${queueEntry.logID} accountIds: ${utils.stringifyReduce(accountIds)}`);
     const message = { txid: queueEntry.acceptedTx.txId, accountIds }
@@ -7503,36 +7559,60 @@ class TransactionQueue {
     }
     return this._transactionQueue.length
   }
+  extractDebugInfoFromQueueEntry(queueEntry: QueueEntry): any {
+    return {
+      nodeId: Self.id,
+      logID: queueEntry.logID,
+      state: queueEntry.state,
+      hasAll: queueEntry.hasAll,
+      isExecutionNode: queueEntry.isInExecutionHome,
+      globalModification: queueEntry.globalModification,
+      entryID: queueEntry.entryID,
+      collectedData: queueEntry.collectedData,
+      finalData: queueEntry.collectedFinalData,
+      preApplyResult: queueEntry.preApplyTXResult,
+      txAge: shardusGetTime() - queueEntry.acceptedTx.timestamp,
+      lastFinalDataRequestTimestamp: queueEntry.lastFinalDataRequestTimestamp,
+      dataSharedTimestamp: queueEntry.dataSharedTimestamp,
+      firstVoteTimestamp: queueEntry.firstVoteReceivedTimestamp,
+      firstConfirmationsTimestamp: queueEntry.firstConfirmOrChallengeTimestamp,
+      robustBestConfirmation: queueEntry.receivedBestConfirmation,
+      robustBestVote: queueEntry.receivedBestVote,
+      robustBestChallenge: queueEntry.receivedBestChallenge,
+      completedRobustVote: queueEntry.robustQueryVoteCompleted,
+      completedRobustChallenge: queueEntry.robustQueryConfirmOrChallengeCompleted,
+      eligibleToVote: queueEntry.eligibleNodeIdsToVote.has(Self.id),
+      eligibleToConfirm: queueEntry.eligibleNodeIdsToConfirm.has(Self.id),
+      txDebug: queueEntry.txDebug,
+      executionDebug: queueEntry.executionDebug,
+      waitForReceiptOnly: queueEntry.waitForReceiptOnly,
+      ourVote: queueEntry.ourVote || null,
+      receipt2: this.stateManager.getReceipt2(queueEntry) || null,
+      uniqueChallenges: queueEntry.uniqueChallengesCount,
+      bestKeptChallenges: queueEntry.bestKeptChallenges || null,
+    }
+  }
   getQueueItems(): any[] {
-    return this._transactionQueue.map((queueEntry) => {
-      return {
-        logID: queueEntry.logID,
-        state: queueEntry.state,
-        hasAll: queueEntry.hasAll,
-        isExecutionNode: queueEntry.isInExecutionHome,
-        globalModification: queueEntry.globalModification,
-        entryID: queueEntry.entryID,
-        collectedData: queueEntry.collectedData,
-        finalData: queueEntry.collectedFinalData,
-        preApplyResult: queueEntry.preApplyTXResult,
-        txAge: shardusGetTime() - queueEntry.acceptedTx.timestamp,
-        lastFinalDataRequestTimestamp: queueEntry.lastFinalDataRequestTimestamp,
-        dataSharedTimestamp: queueEntry.dataSharedTimestamp,
-        firstVoteTimestamp: queueEntry.firstVoteReceivedTimestamp,
-        firstConfirmationsTimestamp: queueEntry.firstConfirmOrChallengeTimestamp,
-        robustBestConfirmation: queueEntry.receivedBestConfirmation,
-        robustBestVote: queueEntry.receivedBestVote,
-        robustBestChallenge: queueEntry.receivedBestChallenge,
-        completedRobustVote: queueEntry.robustQueryVoteCompleted,
-        completedRobustChallenge: queueEntry.robustQueryConfirmOrChallengeCompleted,
-        txDebug: queueEntry.txDebug,
-        executionDebug: queueEntry.executionDebug,
-        waitForReceiptOnly: queueEntry.waitForReceiptOnly,
-        ourVote: queueEntry.ourVote || null,
-        receipt2: this.stateManager.getReceipt2(queueEntry) || null,
-        uniqueChallenges: queueEntry.uniqueChallengesCount
+    return this._transactionQueue.map((queueEntry => {
+      return this.extractDebugInfoFromQueueEntry(queueEntry)
+    }))
+  }
+  getQueueEntryDebugInfoByTxId(txId: string): any {
+    const queueEntries: QueueEntry[] = []
+    for (const queueEntry of this._transactionQueue) {
+      if (queueEntry.acceptedTx.txId === txId) {
+        queueEntries.push(queueEntry)
       }
+    }
+    // also lookup the entry from archived queue
+    const archivedQueueEntry = this.archivedQueueEntriesByID.get(txId)
+    if (archivedQueueEntry) {
+      queueEntries.push(archivedQueueEntry)
+    }
+    const queueEntryDebugInfo = queueEntries.map((queueEntry) => {
+      return this.extractDebugInfoFromQueueEntry(queueEntry)
     })
+    return queueEntryDebugInfo
   }
   removeTxFromArchivedQueue(txId: string) {
     // remove from the archived queue array and map by txId

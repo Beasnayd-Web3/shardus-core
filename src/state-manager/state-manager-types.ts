@@ -89,6 +89,7 @@ export type QueueEntry = {
   // Consensus tracking:
   ourVote?: AppliedVote
   ourVoteHash?: string
+  ourConfirmOrChallenge?: ConfirmOrChallengeMessage
   collectedVotes: AppliedVote[]
   collectedVoteHashes: AppliedVoteHash[]
   pendingVotes: Map<string, AppliedVote>,
@@ -113,6 +114,7 @@ export type QueueEntry = {
   acceptVoteMessage: boolean
   acceptConfirmOrChallenge: boolean
   uniqueChallenges: { [key: string]: ConfirmOrChallengeMessage }
+  bestKeptChallenges: ConfirmOrChallengeMessage[]
   uniqueChallengesCount: number
   robustAccountDataPromises?: { [key: string]: Promise<Shardus.WrappedData> }
   queryingRobustVote?: boolean
@@ -120,6 +122,7 @@ export type QueueEntry = {
   queryingRobustAccountData?: boolean
   queryingFinalData: boolean
   lastFinalDataRequestTimestamp: number
+  finalDataRequestCount: number
   topConfirmations: Set<string>
   topVoters: Set<string>
   almostExpired?: boolean

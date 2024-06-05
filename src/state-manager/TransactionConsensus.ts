@@ -427,7 +427,15 @@ class TransactionConsenus {
           }
 
           // refine the result and unique count
-          const { receivedBestChallenge, receivedBestConfirmation, uniqueChallengesCount } = queueEntry;
+          const { receivedBestChallenge, receivedBestConfirmation} = queueEntry;
+          let uniqueChallengesCount = 0
+
+          if (Context.config.stateManager.keepMultipleBestChallenges) {
+            uniqueChallengesCount = queueEntry.bestKeptChallenges.length
+          } else {
+            uniqueChallengesCount = queueEntry.uniqueChallengesCount
+          }
+
           if (receivedBestChallenge && uniqueChallengesCount >= this.config.stateManager.minRequiredChallenges) {
             confirmOrChallengeResult.result = receivedBestChallenge;
             confirmOrChallengeResult.uniqueCount = uniqueChallengesCount;
@@ -997,7 +1005,6 @@ class TransactionConsenus {
           }
 
           const appendSuccessful = this.tryAppendMessage(queueEntry, payload)
-
           if (logFlags.debug)
             this.mainLogger.debug(
               `spread_confirmOrChallenge ${queueEntry.logID} appendSuccessful:${appendSuccessful}`
@@ -1185,7 +1192,7 @@ class TransactionConsenus {
         const applyResponse = queueEntry.preApplyTXResult.applyResponse
         let wrappedStates = this.stateManager.useAccountWritesOnly ? {} : queueEntry.collectedData
         const writtenAccountsMap: WrappedResponses = {}
-        if (applyResponse.accountWrites != null && applyResponse.accountWrites.length > 0) {
+        if (applyResponse != null && applyResponse.accountWrites != null && applyResponse.accountWrites.length > 0) {
           for (const writtenAccount of applyResponse.accountWrites) {
             writtenAccountsMap[writtenAccount.accountId] = writtenAccount.data
             writtenAccountsMap[writtenAccount.accountId].prevStateId = wrappedStates[writtenAccount.accountId]
@@ -1219,6 +1226,10 @@ class TransactionConsenus {
    * @param queueEntry
    */
   hasAppliedReceiptMatchingPreApply(queueEntry: QueueEntry, appliedReceipt: AppliedReceipt): boolean {
+    if (queueEntry.preApplyTXResult == null || queueEntry.preApplyTXResult.applyResponse == null) {
+      /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`hasAppliedReceiptMatchingPreApply  ${queueEntry.logID} preApplyTXResult == null or applyResponse == null`)
+      return false
+    }
     // This is much easier than the old way
     if (queueEntry.ourVote) {
       const receipt = queueEntry.appliedReceipt2 ?? queueEntry.recievedAppliedReceipt2
@@ -1531,12 +1542,19 @@ class TransactionConsenus {
           }
 
           // we have received challenge message, produce failed receipt
+          let hasEnoughChallenges = false
+          if (Context.config.stateManager.keepMultipleBestChallenges) {
+            hasEnoughChallenges = queueEntry.bestKeptChallenges.length >= Context.config.stateManager.minRequiredChallenges
+          } else {
+            hasEnoughChallenges = queueEntry.uniqueChallengesCount >= Context.config.stateManager.minRequiredChallenges
+          }
           if (
             queueEntry.receivedBestChallenge &&
             queueEntry.receivedBestChallenger &&
-            queueEntry.uniqueChallengesCount >= this.config.stateManager.minRequiredChallenges
+            hasEnoughChallenges
           ) {
-            nestedCountersInstance.countEvent('consensus', 'tryProduceReceipt producing fail receipt from unique challenges')
+            nestedCountersInstance.countEvent('consensus', 'tryProduceReceipt producing fail receipt from enough' +
+              ' challenges')
             const appliedReceipt: AppliedReceipt = {
               txid: queueEntry.receivedBestChallenge.appliedVote.txid,
               result: false,
@@ -2021,35 +2039,9 @@ class TransactionConsenus {
         } finally {
         }
       }
-      // const nodesToAsk = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
-      let nodesToAsk = []
-
-      // for (const key of Object.keys(queueEntry.localKeys)) {
-      //   if (queueEntry.localKeys[key] === true) {
-      //     const nodeShardData: StateManagerTypes.shardFunctionTypes.NodeShardData =
-      //       this.stateManager.currentCycleShardData.nodeShardData
-      //
-      //     const homeNode = ShardFunctions.findHomeNode(
-      //       Context.stateManager.currentCycleShardData.shardGlobals,
-      //       key,
-      //       Context.stateManager.currentCycleShardData.parititionShardDataMap
-      //     )
-      //     const storageNodes = homeNode.nodeThatStoreOurParitionFull
-      //     const storageNodesIdSet = new Set(storageNodes.map(node => node.id))
-      //     for (const node of queueEntry.transactionGroup) {
-      //       if (storageNodesIdSet.has(node.id)) {
-      //         nodesToAsk.push(node)
-      //       }
-      //     }
-      //   }
-      // }
+      const nodesToAsk = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
 
       nestedCountersInstance.countEvent('robustQueryConfirmOrChallenge', `nodesToAsk:${nodesToAsk.length}`)
-
-      if (nodesToAsk.length === 0) {
-        nestedCountersInstance.countEvent('robustQueryConfirmOrChallenge', `nodesToAsk is 0`)
-        nodesToAsk = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
-      }
 
       const redundancy = 3
       const maxRetry = 10
@@ -2272,7 +2264,8 @@ class TransactionConsenus {
             )
           }
         }
-        const shouldChallenge = queueEntry.ourVoteHash != null && queueEntry.ourVoteHash !== finalVoteHash
+        const shouldChallenge = queueEntry.ourVote != null && queueEntry.ourVoteHash != null && queueEntry.ourVoteHash !== finalVoteHash
+        if (shouldChallenge) nestedCountersInstance.countEvent('confirmOrChallenge', 'shouldChallenge: true')
 
         if (this.stateManager.consensusLog)
           this.mainLogger.debug(
@@ -2367,6 +2360,8 @@ class TransactionConsenus {
       const signedConfirmMessage = this.crypto.sign(confirmMessage)
       if (this.stateManager.consensusLog) this.mainLogger.debug(`confirmVoteAndShare: ${queueEntry.logID}`)
 
+      queueEntry.ourConfirmOrChallenge = signedConfirmMessage
+
       //Share message to tx group
       const gossipGroup = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
       Comms.sendGossip('spread_confirmOrChallenge', signedConfirmMessage, '', Self.id, gossipGroup, true, 10, queueEntry.acceptedTx.txId, `confirmVote_${NodeList.activeIdToPartition.get(signedConfirmMessage.appliedVote?.node_id)}`)
@@ -2390,27 +2385,26 @@ class TransactionConsenus {
 
       // Should check account integrity only when before states are different from best vote
       let doStatesMatch = true
-      const voteBeforeStates = queueEntry.receivedBestVote.account_state_hash_before
-      const ourCollectedData = Object.values(queueEntry.collectedData)
-      if (voteBeforeStates.length !== ourCollectedData.length) {
-        doStatesMatch = false
-      }
-      for (let i = 0; i < voteBeforeStates.length; i++) {
-        if (ourCollectedData[i] == null) {
+      const beforeStatesFromRobustVote = queueEntry.receivedBestVote.account_state_hash_before
+
+      for (let i = 0; i < beforeStatesFromRobustVote.length; i++) {
+        const accountId = queueEntry.receivedBestVote.account_id[i]
+        const collectedData = queueEntry.collectedData[accountId]
+        if (collectedData == null) {
           doStatesMatch = false
           nestedCountersInstance.countEvent(
             'confirmOrChallenge',
             'tryChallengeVoteAndShare canceled because ourCollectedData is null'
           )
-          break
+          return // no need to integrity check
         }
-        if (voteBeforeStates[i] !== ourCollectedData[i].stateId) {
+        if (beforeStatesFromRobustVote[i] !== collectedData.stateId) {
           doStatesMatch = false
           nestedCountersInstance.countEvent(
             'confirmOrChallenge',
             'tryChallengeVoteAndShare states do not match'
           )
-          break
+          break // will do integrity check later
         }
       }
       if (this.produceBadChallenge) doStatesMatch = false
@@ -2429,7 +2423,7 @@ class TransactionConsenus {
           'confirmOrChallenge',
           'tryChallengeVoteAndShare account integrity not ok.'
         )
-        if (logFlags.verbose)
+        if (logFlags.debug)
           this.mainLogger.debug(`challengeVoteAndShare: ${queueEntry.logID} account integrity is not ok`)
         // we should not challenge or confirm if account integrity is not ok
         queueEntry.completedConfirmedOrChallenge = true
@@ -2447,6 +2441,7 @@ class TransactionConsenus {
         this.mainLogger.debug(
           `challengeVoteAndShare: ${queueEntry.logID}  ${JSON.stringify(signedChallengeMessage)}}`
         )
+      queueEntry.ourConfirmOrChallenge = signedChallengeMessage
 
       //Share message to tx group
       const gossipGroup = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
@@ -2495,8 +2490,7 @@ class TransactionConsenus {
         const collectedAccountData = queueEntry.collectedData[key]
         const robustQueryAccountData = results[i]
         if (
-          robustQueryAccountData.stateId === collectedAccountData.stateId &&
-          robustQueryAccountData.timestamp === collectedAccountData.timestamp
+          robustQueryAccountData.stateId === collectedAccountData.stateId
         ) {
           nestedCountersInstance.countEvent('checkAccountIntegrity', 'collected data and robust data match')
           if (logFlags.debug)
@@ -2516,6 +2510,7 @@ class TransactionConsenus {
               )} robustAccountData: ${utils.stringify(robustQueryAccountData)}`
             )
           }
+          break // no need to check other accounts
         }
       }
     } else {
@@ -2579,7 +2574,7 @@ class TransactionConsenus {
         ourVote.transaction_result = !ourVote.transaction_result
       }
 
-      ourVote.app_data_hash = queueEntry?.preApplyTXResult?.applyResponse.appReceiptDataHash
+      ourVote.app_data_hash = queueEntry?.preApplyTXResult?.applyResponse?.appReceiptDataHash || ''
 
       if (queueEntry.debugFail_voteFlip === true) {
         /* prettier-ignore */ if (logFlags.verbose) if (logFlags.playback) this.logger.playbackLogNote('shrd_createAndShareVote_voteFlip', `${queueEntry.acceptedTx.txId}`, `qId: ${queueEntry.entryID} `)
@@ -2804,6 +2799,11 @@ class TransactionConsenus {
       return this.crypto.hash(voteToHash)
     }
   }
+  addPendingConfirmOrChallenge(queueEntry: QueueEntry, confirmOrChallenge: ConfirmOrChallengeMessage): void {
+    if (queueEntry.pendingConfirmOrChallenge.has(confirmOrChallenge.nodeId) === false) {
+      queueEntry.pendingConfirmOrChallenge.set(confirmOrChallenge.nodeId, confirmOrChallenge)
+    }
+  }
 
   /**
    * tryAppendMessage
@@ -2813,18 +2813,13 @@ class TransactionConsenus {
    * @param confirmOrChallenge
    */
   tryAppendMessage(queueEntry: QueueEntry, confirmOrChallenge: ConfirmOrChallengeMessage): boolean {
-    if (queueEntry.acceptVoteMessage === true) {
-      /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} we are still accepting vote messages. Not ready`)
-      if (queueEntry.pendingConfirmOrChallenge.has(confirmOrChallenge.nodeId) === false) {
-        queueEntry.pendingConfirmOrChallenge.set(confirmOrChallenge.nodeId, confirmOrChallenge)
-      }
+    if (queueEntry.acceptVoteMessage === true) { /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} we are still accepting vote messages. Not ready`)
+      this.addPendingConfirmOrChallenge(queueEntry, confirmOrChallenge)
       return false
     }
     if (queueEntry.robustQueryVoteCompleted === false) {
       /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} robustQueryVoteCompleted: ${queueEntry.robustQueryVoteCompleted}. Not ready`)
-      if (queueEntry.pendingConfirmOrChallenge.has(confirmOrChallenge.nodeId) === false) {
-        queueEntry.pendingConfirmOrChallenge.set(confirmOrChallenge.nodeId, confirmOrChallenge)
-      }
+      this.addPendingConfirmOrChallenge(queueEntry, confirmOrChallenge)
       return false
     }
     if (queueEntry.acceptConfirmOrChallenge === false || queueEntry.appliedReceipt2 != null) {
@@ -2875,6 +2870,7 @@ class TransactionConsenus {
       this.mainLogger.error(
         `tryAppendMessage: ${queueEntry.logID} confirm/challenge is too early. Not finalized best vote yet`
       )
+      this.addPendingConfirmOrChallenge(queueEntry, confirmOrChallenge)
       return false
     }
 
@@ -2963,6 +2959,16 @@ class TransactionConsenus {
     } else if (confirmOrChallenge.message === 'challenge') {
       let isBetterThanCurrentChallenge = false
       let receivedChallenger: Shardus.NodeWithRank
+      if (queueEntry.executionGroupMap.has(confirmOrChallenge.nodeId)) {
+        receivedChallenger = queueEntry.executionGroupMap.get(
+          confirmOrChallenge.nodeId
+        ) as Shardus.NodeWithRank;
+      }
+
+      if (receivedChallenger == null) {
+        /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} receivedChallenger is null`)
+        return false
+      }
 
       // add the challenge to the queueEntry if it is from a unique node
       if (queueEntry.uniqueChallenges[confirmOrChallenge.sign.owner] == null) {
@@ -2976,26 +2982,51 @@ class TransactionConsenus {
           )
       }
 
+      let isExistingChallenge = false
+      let notEnoughChallenges = false
+
+      // Check if the new challenge is an existing challenge
+      if (Context.config.stateManager.keepMultipleBestChallenges) {
+        isExistingChallenge = queueEntry.bestKeptChallenges.some(topChallenge => {
+          return topChallenge.nodeId === confirmOrChallenge.nodeId
+        })
+      } else {
+        isExistingChallenge = queueEntry.receivedBestChallenge && queueEntry.receivedBestChallenge.nodeId === confirmOrChallenge.nodeId
+      }
+
+      // Check if the new challenge is the first challenge
+      if (Context.config.stateManager.keepMultipleBestChallenges) {
+        notEnoughChallenges = queueEntry.bestKeptChallenges.length < Context.config.stateManager.minRequiredChallenges // should fill until minRequiredChallenges3
+      }  else {
+        notEnoughChallenges = queueEntry.receivedBestChallenge == null
+      }
+
       this.mainLogger.debug(
         `tryAppendMessage: ${
           queueEntry.logID
         } challenge received and processing. queueEntry.receivedBestChallenge: ${JSON.stringify(
           queueEntry.receivedBestChallenge
-        )}`
+        )}, received challenge: ${JSON.stringify(confirmOrChallenge)}, isBetterThanCurrentChallenge: ${isBetterThanCurrentChallenge}, isExistingChallenge: ${isExistingChallenge}, notEnoughChallenges: ${notEnoughChallenges}`
       )
-      if (!queueEntry.receivedBestChallenge) isBetterThanCurrentChallenge = true
-      else if (queueEntry.receivedBestChallenge.nodeId === confirmOrChallenge.nodeId)
-        isBetterThanCurrentChallenge = false
+      if (notEnoughChallenges && isExistingChallenge === false) isBetterThanCurrentChallenge = true;
+      else if (isExistingChallenge) isBetterThanCurrentChallenge = false;
       else {
-        // Compare ranks
-        if (queueEntry.executionGroupMap.has(confirmOrChallenge.nodeId)) {
-          receivedChallenger = queueEntry.executionGroupMap.get(
-            confirmOrChallenge.nodeId
-          ) as Shardus.NodeWithRank
+        // Compare ranks against all challenges in bestKeptChallenges if the config allows
+        if (Context.config.stateManager.keepMultipleBestChallenges) {
+          // Determine if the new challenge is better than any of the current best kept challenges
+          isBetterThanCurrentChallenge = queueEntry.bestKeptChallenges.some(topChallenge => {
+            const topChallengeNode = queueEntry.executionGroupMap.get(topChallenge.nodeId)  as  Shardus.NodeWithRank
+            const topChallengeRank = topChallengeNode.rank
+            const newChallengeNode = queueEntry.executionGroupMap.get(confirmOrChallenge.nodeId) as Shardus.NodeWithRank
+            const newRank = newChallengeNode.rank
+            return newRank < topChallengeRank;
+          });
+        } else {
+          // Compare rank against the single best challenger if keepMultipleBestChallenges is false
+          isBetterThanCurrentChallenge = receivedChallenger.rank < queueEntry.receivedBestChallenger.rank;
         }
-        isBetterThanCurrentChallenge = receivedChallenger.rank < queueEntry.receivedBestChallenger.rank
       }
-
+      // return false  if the new challenge is not better than the current challenge
       if (!isBetterThanCurrentChallenge) {
         if (logFlags.debug)
           this.mainLogger.debug(
@@ -3004,25 +3035,39 @@ class TransactionConsenus {
         return false
       }
 
-      queueEntry.receivedBestChallenge = confirmOrChallenge
+      // Keep the best 3 challenges if the configuration allows it
+      if (Context.config.stateManager.keepMultipleBestChallenges) {
+        // Add the new challenge
+        queueEntry.bestKeptChallenges.push(confirmOrChallenge);
+        if (logFlags.debug) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} challenge added to bestKeptChallenges. ${utils.stringify(queueEntry.bestKeptChallenges)}`)
 
-      if (receivedChallenger) {
-        queueEntry.receivedBestChallenger = receivedChallenger
-      } else {
-        if (queueEntry.executionGroupMap.has(confirmOrChallenge.nodeId)) {
-          queueEntry.receivedBestChallenger = queueEntry.executionGroupMap.get(
-            confirmOrChallenge.nodeId
-          ) as Shardus.NodeWithRank
+        // Sort the challenges by rank
+        queueEntry.bestKeptChallenges.sort((a, b):  number => {
+          const nodeA = queueEntry.executionGroupMap.get(a.nodeId) as Shardus.NodeWithRank;
+          const nodeB = queueEntry.executionGroupMap.get(b.nodeId) as Shardus.NodeWithRank;
+          return nodeA.rank <  nodeB.rank ? -1 : 1;
+        });
+
+        // remove duplicate  challenges in the bestKeptChallenges
+        queueEntry.bestKeptChallenges = queueEntry.bestKeptChallenges.filter((challenge, index, self) => {
+          return index === self.findIndex((t) => t.nodeId === challenge.nodeId);
+        });
+
+        // Keep only the top minRequiredChallenges3 challenges
+        if (queueEntry.bestKeptChallenges.length > Context.config.stateManager.minRequiredChallenges) {
+          queueEntry.bestKeptChallenges.splice(Context.config.stateManager.minRequiredChallenges);
         }
+
+        // update the best received challenge
+        queueEntry.receivedBestChallenge = queueEntry.bestKeptChallenges[0];
+        queueEntry.receivedBestChallenger = queueEntry.executionGroupMap.get(queueEntry.receivedBestChallenge.nodeId) as Shardus.NodeWithRank;
+      } else {
+        queueEntry.receivedBestChallenge = confirmOrChallenge;
+        queueEntry.receivedBestChallenger = queueEntry.executionGroupMap.get(queueEntry.receivedBestChallenge.nodeId) as Shardus.NodeWithRank;
       }
-      if (logFlags.debug)
-        this.mainLogger.debug(
-          `tryAppendMessage: ${
-            queueEntry.logID
-          } challenge received and processed. queueEntry.receivedBestChallenge: ${JSON.stringify(
-            queueEntry.receivedBestChallenge
-          )}, receivedBestChallenger: ${queueEntry.receivedBestChallenger}`
-        )
+      if (logFlags.debug) {
+        this.mainLogger.debug(`Challenge received and processed. LogID: ${queueEntry.logID}, Best Challenge: ${JSON.stringify(queueEntry.receivedBestChallenge)}, Best Challenger: ${queueEntry.receivedBestChallenger}`);
+      }
       return true
     }
   }

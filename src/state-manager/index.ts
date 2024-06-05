@@ -197,6 +197,7 @@ class StateManager {
   loseTxChance: number
   failReceiptChance: number
   voteFlipChance: number
+  applyFailChance: number
   failNoRepairTxChance: number
 
   syncSettleTime: number
@@ -523,10 +524,17 @@ class StateManager {
     }
 
     this.voteFlipChance = 0
+    this.applyFailChance = 0
     if (this.config && this.config.debug) {
       this.voteFlipChance = this.config.debug.voteFlipChance
       if (this.voteFlipChance == null) {
         this.voteFlipChance = 0
+      }
+    }
+    if (this.config && this.config.debug) {
+      this.applyFailChance = this.config.debug.applyFailChance
+      if (this.applyFailChance == null) {
+        this.applyFailChance = 0
       }
     }
 
@@ -2251,6 +2259,14 @@ class StateManager {
       res.end()
     })
 
+    Context.network.registerExternalGet('debug-queue-item-by-txid', isDebugModeMiddleware, (req, res) => {
+      const txId = req.query.txId as string
+      if (txId == null) return res.send('txId parameter required')
+      let result = this.transactionQueue.getQueueEntryDebugInfoByTxId(txId)
+      res.write(utils.stringify(result))
+      res.end()
+    })
+
     Context.network.registerExternalGet('debug-queue-clear', isDebugModeMiddleware, (req, res) => {
       let result = this.transactionQueue.clearQueueItems()
       res.write(utils.stringify(result))
@@ -3968,7 +3984,22 @@ class StateManager {
         // or see if we got one
         finalReceipt = queueEntry.recievedAppliedReceipt2
       } else if (queueEntry.appliedReceipt2 && queueEntry.recievedAppliedReceipt2) {
-        // we have 2 receipts, use a better one
+        // if we have 2 receipts, use a challenge one if there is any
+        const isOurReceiptChallenge = queueEntry.appliedReceipt2.confirmOrChallenge && queueEntry.appliedReceipt2.confirmOrChallenge.message === 'challenge'
+        const isReceivedReceiptChallenge = queueEntry.recievedAppliedReceipt2.confirmOrChallenge && queueEntry.recievedAppliedReceipt2.confirmOrChallenge.message === 'challenge'
+        if (isOurReceiptChallenge && !isReceivedReceiptChallenge) {
+          nestedCountersInstance.countEvent('stateManager', 'getReceipt2: isOurReceiptChallenge: true')
+          if (logFlags.verbose) this.mainLogger.debug(`getReceipt2: isOurReceiptChallenge: true`)
+          finalReceipt = queueEntry.appliedReceipt2
+          return finalReceipt
+        } else if (!isOurReceiptChallenge && isReceivedReceiptChallenge) {
+          nestedCountersInstance.countEvent('stateManager', 'getReceipt2: isReceivedReceiptChallenge: true')
+          if (logFlags.verbose) this.mainLogger.debug(`getReceipt2: isReceivedReceiptChallenge: true`)
+          finalReceipt = queueEntry.recievedAppliedReceipt2
+          return finalReceipt
+        }
+
+        // we have 2 receipts. Could be both challenges or confirmation, use a better one
         const localReceiptNodeId = queueEntry.appliedReceipt2.confirmOrChallenge.nodeId
         const receivedReceiptNodeId = queueEntry.recievedAppliedReceipt2.confirmOrChallenge.nodeId
 
@@ -4005,6 +4036,16 @@ class StateManager {
     const receipt = this.getReceipt2(queueEntry)
     if (receipt) {
       return receipt.result
+    }
+    return false
+  }
+  getReceiptConfirmation(queueEntry: QueueEntry) {
+    const receipt = this.getReceipt2(queueEntry)
+    if (receipt) {
+      return receipt.result
+    }
+    if (receipt.confirmOrChallenge && receipt.confirmOrChallenge.message === 'confirm') {
+      return true
     }
     return false
   }

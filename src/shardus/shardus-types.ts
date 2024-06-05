@@ -998,6 +998,8 @@ export interface ServerConfiguration {
     failReceiptChance?: number
     /** chance to flip our vote */
     voteFlipChance?: number
+    /** chance to fail the apply result */
+    applyFailChance?: number
     /** should skip patcher repair system */
     skipPatcherRepair?: boolean
     /** chance to fail a TX and the TX repair */
@@ -1216,6 +1218,8 @@ export interface ServerConfiguration {
     txStateMachineChanges: boolean
     // will a node attempt to request final data
     canRequestFinalData:boolean
+    // how many times a node should attempt to request final data
+    maxRetryRequestFinalData: number
     // how many node to re-inject the tx received from client
     numberOfReInjectNodes: number
     // max number of pending nonce tx for an account
@@ -1224,6 +1228,8 @@ export interface ServerConfiguration {
     attachDataToReceipt: boolean
     // number of execution nodes to gossip appliedReceipt
     nodesToGossipAppliedReceipt: number
+    // should we use deep copied wrapped state for apply
+    useCopiedWrappedStateForApply: boolean
     // set "true" will prevent tx from expiring
     disableTxExpiration: boolean
     // whether to remove the tx from the queue if it stuck for X min
@@ -1236,6 +1242,10 @@ export interface ServerConfiguration {
     receiptRemoveFix: boolean
     // fix for stuck txs in the queue
     stuckTxQueueFix: boolean
+    // force vote for failed preApply
+    forceVoteForFailedPreApply: boolean
+    // how many challenges a node should keep
+    keepMultipleBestChallenges: boolean
   }
   /** Options for sharding calculations */
   sharding?: {
