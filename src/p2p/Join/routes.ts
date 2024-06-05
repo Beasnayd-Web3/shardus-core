@@ -485,6 +485,7 @@ const gossipValidJoinRequests: P2P.P2PTypes.GossipHandler<
   })
 
   if (err) {
+    /* prettier-ignore */ nestedCountersInstance.countEvent( 'p2p', `join-gossip-reject: invalid payload.joinRequest` )
     warn(`gossipValidJoinRequests: invalid payload.joinRequest: ${err}`)
     return
   }
