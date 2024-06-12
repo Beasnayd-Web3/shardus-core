@@ -7,7 +7,7 @@ import * as http from '../http'
 import * as Shardus from '../shardus/shardus-types'
 import { profilerInstance } from '../utils/profiler'
 import { nestedCountersInstance } from '../utils/nestedCounters'
-const { stringify } = require('../utils')
+import { Utils } from '@shardus/types'
 const log4jsExtend = require('log4js-extend')
 import got from 'got'
 import { parse as parseUrl } from 'url'
@@ -24,7 +24,7 @@ interface Logger {
   baseDir: string
   config: Shardus.StrictLogsConfiguration
   logDir: string
-  log4Conf: any
+  log4Conf: log4js.Configuration
 
   _playbackLogger: any
 
@@ -103,7 +103,7 @@ export type LogFlags = {
   dapp_verbose: boolean //the dapp using this library will read this flag and log more info if true
   profiling_verbose: boolean
 
-  aalg:boolean //details on automatic access list generation
+  aalg: boolean //details on automatic access list generation
   shardedCache: boolean //details on the sharded cache
 
   lost: boolean // extra logging for the lost system
@@ -145,7 +145,7 @@ export let logFlags: LogFlags = {
   shardedCache: false,
   lost: false,
   rotation: false,
-  seqdiagram: false
+  seqdiagram: false,
 }
 
 const filePath1 = path.join(process.cwd(), 'data-logs', 'cycleRecords1.txt')
@@ -220,7 +220,7 @@ class Logger {
       console.log('startInErrorLogMode=true!')
       this.setErrorFlags()
     }
-    console.log(`logFlags: ` + stringify(logFlags))
+    console.log(`logFlags: ` + Utils.safeStringify(logFlags))
 
     this._seenAddresses = {}
     this._shortStrings = {}
@@ -281,7 +281,7 @@ class Logger {
         this._nodeInfos[input.id] = { node: input, out, shorthash }
         return out
       }
-      return stringify(input)
+      return Utils.safeStringify(input)
     }
   }
 
@@ -307,7 +307,7 @@ class Logger {
     to = this.identifyNode(to)
 
     if (utils.isObject(id)) {
-      id = stringify(id)
+      id = Utils.safeStringify(id)
     } else {
       id = utils.makeShortHash(id)
     }
@@ -339,14 +339,12 @@ class Logger {
     logFlags.fatal = true
     logFlags.important_as_fatal = true
     logFlags.playback = false
-    logFlags.seqdiagram = true
   }
 
   setDisableAllFlags() {
     for (const [key, value] of Object.entries(logFlags)) {
       logFlags[key] = false
     }
-    logFlags.seqdiagram = true
   }
 
   setErrorFlags() {
@@ -359,7 +357,6 @@ class Logger {
     logFlags.important_as_error = true
 
     logFlags.playback = false
-    logFlags.seqdiagram = true
 
     //temp debug
     // logFlags.aalg = true
@@ -381,8 +378,6 @@ class Logger {
 
     logFlags.important_as_fatal = true
     logFlags.important_as_error = true
-
-    logFlags.seqdiagram = true
 
     //logFlags.rotation = true
   }
@@ -497,6 +492,69 @@ class Logger {
         })
       }
     )
+    Context.network.registerExternalGet('debug-clearlog', isDebugModeMiddlewareMedium, async (req, res) => {
+      const requestedFileName = req?.query?.file
+      let filesToClear = []      
+      try {
+        if (!requestedFileName) {
+          res.status(400).send('No log file specified')
+          return
+        }
+
+        // Retrieve valid filenames from the logger configuration
+      const validFileNames: string[] = []
+      for (const appender of Object.values(this.log4Conf.appenders)) {
+        if (appender.type === 'file') {
+          validFileNames.push(path.basename(appender.filename))
+        }
+      }
+      // explicitly add out.log since that is handled in saveConsoleOutput.ts
+      if (this.config.saveConsoleOutput) { 
+        validFileNames.push('out.log')
+      }
+
+        // If 'all' is requested, set to clear all files, otherwise sanitize the input file name.
+
+        if (requestedFileName.toLowerCase() === 'all') {
+          filesToClear = validFileNames
+        } else {
+          const sanitizedFileName = path.basename(requestedFileName)
+          if (!validFileNames.includes(sanitizedFileName)) {
+            res.status(400).send('Invalid log file specified')
+            return
+          }
+          filesToClear.push(sanitizedFileName)
+        }
+
+      } catch (error) {
+        console.error('Error clearing log files 1:', error)
+        res.status(500).send(`Failed to clearing log files with input 1 ${requestedFileName}`)
+      }
+
+      try {
+        // Retrieve and filter all log files and their rotated versions in the directory.
+        // including rotated versions (e.g., out.log.1, out.log.2, etc.)
+        const filesInDir = await fs.promises.readdir(this.logDir)
+        const filesToDelete = filesInDir.filter((file) =>
+          filesToClear.some((f) => file.startsWith(f + '.') && file !== f)
+        )
+
+        // Clear the original log files without deleting them by opening them with 'w+' to truncate and allow read/write
+        const truncatePromises = filesToClear.map((file) =>
+          fs.promises.open(path.join(this.logDir, file), 'w+').then((fileHandle) => fileHandle.close())
+        )
+        await Promise.all(truncatePromises)
+
+        // Delete rotated versions
+        const deletePromises = filesToDelete.map((file) => fs.promises.unlink(path.join(this.logDir, file)))
+        await Promise.all(deletePromises)
+
+        res.status(200).send({ success: true })
+      } catch (error) {
+        console.error('Error clearing log files 2:', error)
+        res.status(500).send(`Failed to clearing log files with input 2 ${requestedFileName}`)
+      }
+    })
   }
 
   _containsProtocol(url: string) {
@@ -608,7 +666,7 @@ class Logger {
 
     this.backupLogFlags = utils.deepCopy(logFlags)
 
-    console.log(`base logFlags: ` + stringify(logFlags))
+    console.log(`base logFlags: ` + Utils.safeStringify(logFlags))
   }
 }
 

@@ -84,6 +84,7 @@ import {
 } from '../types/GetAppliedVoteResp'
 import { BadRequest, InternalError, NotFound, serializeResponseError } from '../types/ResponseError'
 import { randomUUID } from 'crypto'
+import { Utils } from '@shardus/types'
 
 class TransactionConsenus {
   app: Shardus.App
@@ -230,12 +231,12 @@ class TransactionConsenus {
 
     Context.network.registerExternalGet('debug-produceBadVote', isDebugModeMiddleware, (req, res) => {
       this.produceBadVote = !this.produceBadVote
-      res.send(utils.safeStringify({ status: 'ok', produceBadVote: this.produceBadVote }))
+      res.send({ status: 'ok', produceBadVote: this.produceBadVote })
     })
 
     Context.network.registerExternalGet('debug-produceBadChallenge', isDebugModeMiddleware, (req, res) => {
       this.produceBadChallenge = !this.produceBadChallenge
-      res.send(utils.safeStringify({ status: 'ok', produceBadChallenge: this.produceBadChallenge }))
+      res.send({ status: 'ok', produceBadChallenge: this.produceBadChallenge })
     })
 
     this.p2p.registerInternal(
@@ -272,7 +273,7 @@ class TransactionConsenus {
           // remove the timestamp from the cache
           delete this.txTimestampCache[cycleCounter][txId]
           this.txTimestampCache[cycleCounter][txId] = null
-          this.mainLogger.debug(`Removed timestamp cache for txId: ${txId}, timestamp: ${JSON.stringify(this.txTimestampCache[cycleCounter][txId])}`)
+          /* prettier-ignore */ this.mainLogger.debug(`Removed timestamp cache for txId: ${txId}, timestamp: ${Utils.safeStringify(this.txTimestampCache[cycleCounter][txId])}`)
           nestedCountersInstance.countEvent('consensus', 'remove_timestamp_cache')
         }
         await respond(true)
@@ -308,7 +309,7 @@ class TransactionConsenus {
           ) {
             // eslint-disable-next-line security/detect-object-injection
             tsReceipt = this.txTimestampCache[readableReq.cycleCounter][readableReq.txId]
-            this.mainLogger.debug(`Found timestamp cache for txId: ${readableReq.txId}, timestamp: ${JSON.stringify(tsReceipt)}`)
+            /* prettier-ignore */ this.mainLogger.debug(`Found timestamp cache for txId: ${readableReq.txId}, timestamp: ${Utils.safeStringify(tsReceipt)}`)
             return respond(tsReceipt, serializeGetTxTimestampResp)
           } else {
             const tsReceipt: Shardus.TimestampReceipt = this.generateTimestampReceipt(
@@ -362,7 +363,7 @@ class TransactionConsenus {
               'consensus',
               'get_confirm_or_challenge no confirmation or challenge'
             )
-            /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`get_confirm_or_challenge no confirmation or challenge for ${queueEntry.logID}, bestVote: ${JSON.stringify(queueEntry.receivedBestVote)},  bestConfirmation: ${JSON.stringify(queueEntry.receivedBestConfirmation)}`)
+            /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`get_confirm_or_challenge no confirmation or challenge for ${queueEntry.logID}, bestVote: ${Utils.safeStringify(queueEntry.receivedBestVote)},  bestConfirmation: ${Utils.safeStringify(queueEntry.receivedBestConfirmation)}`)
             await respond(confirmOrChallengeResult)
           }
 
@@ -421,7 +422,7 @@ class TransactionConsenus {
               'consensus',
               'get_confirm_or_challenge no confirmation or challenge'
             )
-            /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`get_confirm_or_challenge no confirmation or challenge for ${queueEntry.logID}, bestVote: ${JSON.stringify(queueEntry.receivedBestVote)},  bestConfirmation: ${JSON.stringify(queueEntry.receivedBestConfirmation)}`)
+            /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`get_confirm_or_challenge no confirmation or challenge for ${queueEntry.logID}, bestVote: ${Utils.safeStringify(queueEntry.receivedBestVote)},  bestConfirmation: ${Utils.safeStringify(queueEntry.receivedBestConfirmation)}`)
             respond(confirmOrChallengeResult, serializeGetConfirmOrChallengeResp)
             return
           }
@@ -557,14 +558,14 @@ class TransactionConsenus {
         try {
           const queueEntry = this.stateManager.transactionQueue.getQueueEntrySafe(payload.txid) // , payload.timestamp)
           if (queueEntry == null) {
-            this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${payload.txid} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:noTX`)
+            /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${payload.txid} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:noTX`)
             return
           }
           const newVote = payload as AppliedVote
           const appendSuccessful = this.stateManager.transactionConsensus.tryAppendVote(queueEntry, newVote)
 
           if (appendSuccessful) {
-            this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${payload.txid} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:appended`)
+            /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${payload.txid} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:appended`)
             const gossipGroup = this.stateManager.transactionQueue.queueEntryGetTransactionGroup(queueEntry)
             if (gossipGroup.length > 1) {
               // should consider only forwarding in some cases?
@@ -739,7 +740,7 @@ class TransactionConsenus {
             if (queueEntry == null) {
               // It is ok to search the archive for this.  Not checking this was possibly breaking the gossip chain before
               queueEntry = this.stateManager.transactionQueue.getQueueEntryArchived(
-                payload.txid as string,
+                txId,
                 'spread_appliedReceipt2'
               ) // , payload.timestamp)
               if (queueEntry != null) {
@@ -1070,7 +1071,7 @@ class TransactionConsenus {
       let timestampReceipt
       try {
         if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.getTxTimestampBinary) {
-          if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(homeNode.node.id)}: ${'get_tx_timestamp'}`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(homeNode.node.id)}: ${'get_tx_timestamp'}`)
           const serialized_res = await this.p2p.askBinary<getTxTimestampReq, getTxTimestampResp>(
             homeNode.node,
             InternalRouteEnum.binary_get_tx_timestamp,
@@ -1103,7 +1104,7 @@ class TransactionConsenus {
 
       const isValid = this.crypto.verify(timestampReceipt, homeNode.node.publicKey)
       if (isValid) {
-        /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`Timestamp receipt received from home node. TxId: ${txId} isValid: ${isValid}, timestampReceipt: ${JSON.stringify(timestampReceipt)}`)
+        /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`Timestamp receipt received from home node. TxId: ${txId} isValid: ${isValid}, timestampReceipt: ${Utils.safeStringify(timestampReceipt)}`)
         return timestampReceipt
       } else {
         /* prettier-ignore */ if (logFlags.fatal) this.mainLogger.fatal(`Timestamp receipt received from home node ${homeNode.node.publicKey} is not valid. ${utils.stringifyReduce(timestampReceipt)}`)
@@ -1185,7 +1186,7 @@ class TransactionConsenus {
         const applyResponse = queueEntry.preApplyTXResult.applyResponse
         let wrappedStates = this.stateManager.useAccountWritesOnly ? {} : queueEntry.collectedData
         const writtenAccountsMap: WrappedResponses = {}
-        if (applyResponse.accountWrites != null && applyResponse.accountWrites.length > 0) {
+        if (applyResponse != null && applyResponse.accountWrites != null && applyResponse.accountWrites.length > 0) {
           for (const writtenAccount of applyResponse.accountWrites) {
             writtenAccountsMap[writtenAccount.accountId] = writtenAccount.data
             writtenAccountsMap[writtenAccount.accountId].prevStateId = wrappedStates[writtenAccount.accountId]
@@ -1219,6 +1220,10 @@ class TransactionConsenus {
    * @param queueEntry
    */
   hasAppliedReceiptMatchingPreApply(queueEntry: QueueEntry, appliedReceipt: AppliedReceipt): boolean {
+    if (queueEntry.preApplyTXResult == null || queueEntry.preApplyTXResult.applyResponse == null) {
+      /* prettier-ignore */ if (logFlags.debug) this.mainLogger.debug(`hasAppliedReceiptMatchingPreApply  ${queueEntry.logID} preApplyTXResult == null or applyResponse == null`)
+      return false
+    }
     // This is much easier than the old way
     if (queueEntry.ourVote) {
       const receipt = queueEntry.appliedReceipt2 ?? queueEntry.recievedAppliedReceipt2
@@ -1617,7 +1622,7 @@ class TransactionConsenus {
                 this.mainLogger.debug(
                   `tryProduceReceipt: ${
                     queueEntry.logID
-                  } challenge from robust query is better than our challenge. robustQueryConfirmOrChallenge: ${utils.stringify(
+                  } challenge from robust query is better than our challenge. robustQueryConfirmOrChallenge: ${Utils.safeStringify(
                     robustConfirmOrChallenge
                   )}`
                 )
@@ -1764,11 +1769,11 @@ class TransactionConsenus {
                 this.mainLogger.debug(
                   `tryProduceReceipt: ${
                     queueEntry.logID
-                  } confirmation from robust query is better than our confirm. bestNodeFromRobust?Query: ${utils.stringify(
+                  } confirmation from robust query is better than our confirm. bestNodeFromRobust?Query: ${Utils.safeStringify(
                     bestNodeFromRobustQuery
-                  )}, queueEntry.receivedBestVoter: ${utils.stringify(
+                  )}, queueEntry.receivedBestVoter: ${Utils.safeStringify(
                     queueEntry.receivedBestVoter
-                  )}, robustQueryConfirmOrChallenge: ${utils.stringify(robustConfirmOrChallenge)}`
+                  )}, robustQueryConfirmOrChallenge: ${Utils.safeStringify(robustConfirmOrChallenge)}`
                 )
               const robustReceipt: AppliedReceipt = {
                 txid: robustConfirmOrChallenge.appliedVote.txid,
@@ -1922,7 +1927,7 @@ class TransactionConsenus {
           const queryData: AppliedVoteQuery = { txId: queueEntry.acceptedTx.txId }
           if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.getAppliedVoteBinary) {
             const req = queryData as GetAppliedVoteReq
-            if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'get_applied_vote'}`)
+            /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'get_applied_vote'}`)
             const rBin = await Comms.askBinary<GetAppliedVoteReq, GetAppliedVoteResp>(
               node,
               InternalRouteEnum.binary_get_applied_vote,
@@ -1989,7 +1994,7 @@ class TransactionConsenus {
       const queryFn = async (node: Shardus.Node): Promise<ConfirmOrChallengeQueryResponse> => {
         if (node.externalIp === Self.ip && node.externalPort === Self.port) return null
         const queryData = { txId: queueEntry.acceptedTx.txId }
-        if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${queryData.txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'get_confirm_or_challenge'}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${queryData.txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'get_confirm_or_challenge'}`)
         return this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.getConfirmOrChallengeBinary
           ? await Comms.askBinary<GetConfirmOrChallengeReq, GetConfirmOrChallengeResp>(
               node,
@@ -2111,7 +2116,7 @@ class TransactionConsenus {
       try {
         if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.getAccountDataBinary) {
           const req = message as GetAccountDataReqSerializable
-          if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'get_account_data3'}`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'get_account_data3'}`)
           const rBin = await Comms.askBinary<GetAccountDataReqSerializable, GetAccountDataRespSerializable>(
             node,
             InternalRouteEnum.binary_get_account_data,
@@ -2189,7 +2194,7 @@ class TransactionConsenus {
       }
       if (logFlags.debug)
         this.mainLogger.debug(
-          `confirmOrChallenge: ${queueEntry.logID}  receivedBestVote: ${JSON.stringify(
+          `confirmOrChallenge: ${queueEntry.logID}  receivedBestVote: ${Utils.safeStringify(
             queueEntry.receivedBestVote
           )}} `
         )
@@ -2445,7 +2450,7 @@ class TransactionConsenus {
       const signedChallengeMessage = this.crypto.sign(challengeMessage)
       if (logFlags.debug)
         this.mainLogger.debug(
-          `challengeVoteAndShare: ${queueEntry.logID}  ${JSON.stringify(signedChallengeMessage)}}`
+          `challengeVoteAndShare: ${queueEntry.logID}  ${Utils.safeStringify(signedChallengeMessage)}}`
         )
 
       //Share message to tx group
@@ -2511,9 +2516,9 @@ class TransactionConsenus {
             this.mainLogger.debug(
               `checkAccountIntegrity: ${
                 queueEntry.logID
-              } key: ${key} failed. collectedAccountData: ${utils.stringify(
+              } key: ${key} failed. collectedAccountData: ${Utils.safeStringify(
                 collectedAccountData
-              )} robustAccountData: ${utils.stringify(robustQueryAccountData)}`
+              )} robustAccountData: ${Utils.safeStringify(robustQueryAccountData)}`
             )
           }
         }
@@ -2579,7 +2584,7 @@ class TransactionConsenus {
         ourVote.transaction_result = !ourVote.transaction_result
       }
 
-      ourVote.app_data_hash = queueEntry?.preApplyTXResult?.applyResponse.appReceiptDataHash
+      ourVote.app_data_hash = queueEntry?.preApplyTXResult?.applyResponse?.appReceiptDataHash || ''
 
       if (queueEntry.debugFail_voteFlip === true) {
         /* prettier-ignore */ if (logFlags.verbose) if (logFlags.playback) this.logger.playbackLogNote('shrd_createAndShareVote_voteFlip', `${queueEntry.acceptedTx.txId}`, `qId: ${queueEntry.entryID} `)
@@ -2672,6 +2677,9 @@ class TransactionConsenus {
 
       // save our vote to our queueEntry
       queueEntry.ourVote = ourVote
+      if (queueEntry.firstVoteReceivedTimestamp === 0) {
+        queueEntry.firstVoteReceivedTimestamp = shardusGetTime()
+      }
 
       if (this.stateManager.transactionQueue.useNewPOQ) {
         if (isEligibleToShareVote === false) {
@@ -2804,6 +2812,11 @@ class TransactionConsenus {
       return this.crypto.hash(voteToHash)
     }
   }
+  addPendingConfirmOrChallenge(queueEntry: QueueEntry, confirmOrChallenge: ConfirmOrChallengeMessage): void {
+    if (queueEntry.pendingConfirmOrChallenge.has(confirmOrChallenge.nodeId) === false) {
+      queueEntry.pendingConfirmOrChallenge.set(confirmOrChallenge.nodeId, confirmOrChallenge)
+    }
+  }
 
   /**
    * tryAppendMessage
@@ -2813,18 +2826,13 @@ class TransactionConsenus {
    * @param confirmOrChallenge
    */
   tryAppendMessage(queueEntry: QueueEntry, confirmOrChallenge: ConfirmOrChallengeMessage): boolean {
-    if (queueEntry.acceptVoteMessage === true) {
-      /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} we are still accepting vote messages. Not ready`)
-      if (queueEntry.pendingConfirmOrChallenge.has(confirmOrChallenge.nodeId) === false) {
-        queueEntry.pendingConfirmOrChallenge.set(confirmOrChallenge.nodeId, confirmOrChallenge)
-      }
+    if (queueEntry.acceptVoteMessage === true) { /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} we are still accepting vote messages. Not ready`)
+      this.addPendingConfirmOrChallenge(queueEntry, confirmOrChallenge)
       return false
     }
     if (queueEntry.robustQueryVoteCompleted === false) {
       /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID} robustQueryVoteCompleted: ${queueEntry.robustQueryVoteCompleted}. Not ready`)
-      if (queueEntry.pendingConfirmOrChallenge.has(confirmOrChallenge.nodeId) === false) {
-        queueEntry.pendingConfirmOrChallenge.set(confirmOrChallenge.nodeId, confirmOrChallenge)
-      }
+      this.addPendingConfirmOrChallenge(queueEntry, confirmOrChallenge)
       return false
     }
     if (queueEntry.acceptConfirmOrChallenge === false || queueEntry.appliedReceipt2 != null) {
@@ -2841,7 +2849,7 @@ class TransactionConsenus {
     /* prettier-ignore */
     if (logFlags.playback) this.logger.playbackLogNote("tryAppendMessage", `${queueEntry.logID}`, `collectedVotes: ${queueEntry.collectedVotes.length}`);
     /* prettier-ignore */
-    if (logFlags.debug) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID}   ${JSON.stringify(confirmOrChallenge)} `);
+    if (logFlags.debug) this.mainLogger.debug(`tryAppendMessage: ${queueEntry.logID}   ${Utils.safeStringify(confirmOrChallenge)} `);
     // check if the node is in the execution group
     const isMessageFromExecutionNode = queueEntry.executionGroupMap.has(confirmOrChallenge.nodeId)
 
@@ -2875,6 +2883,7 @@ class TransactionConsenus {
       this.mainLogger.error(
         `tryAppendMessage: ${queueEntry.logID} confirm/challenge is too early. Not finalized best vote yet`
       )
+      this.addPendingConfirmOrChallenge(queueEntry, confirmOrChallenge)
       return false
     }
 
@@ -2883,7 +2892,7 @@ class TransactionConsenus {
       this.mainLogger.error(
         `tryAppendMessage: ${
           queueEntry.logID
-        } confirmOrChallenge is not for the same vote that was finalized in the previous phase, queueEntry.receivedBestVote: ${JSON.stringify(
+        } confirmOrChallenge is not for the same vote that was finalized in the previous phase, queueEntry.receivedBestVote: ${Utils.safeStringify(
           queueEntry.receivedBestVote
         )}`
       )
@@ -2955,7 +2964,7 @@ class TransactionConsenus {
         this.mainLogger.debug(
           `tryAppendMessage: ${
             queueEntry.logID
-          } confirmation received and processed. queueEntry.receivedBestConfirmation: ${JSON.stringify(
+          } confirmation received and processed. queueEntry.receivedBestConfirmation: ${Utils.safeStringify(
             queueEntry.receivedBestConfirmation
           )}, receivedBestConfirmedNode: ${queueEntry.receivedBestConfirmedNode}`
         )
@@ -2970,7 +2979,7 @@ class TransactionConsenus {
         queueEntry.uniqueChallengesCount++
         if (this.stateManager.consensusLog)
           this.mainLogger.debug(
-            `tryAppendMessage: ${queueEntry.logID} unique challenge added. ${JSON.stringify(
+            `tryAppendMessage: ${queueEntry.logID} unique challenge added. ${Utils.safeStringify(
               queueEntry.uniqueChallenges
             )}`
           )
@@ -2979,7 +2988,7 @@ class TransactionConsenus {
       this.mainLogger.debug(
         `tryAppendMessage: ${
           queueEntry.logID
-        } challenge received and processing. queueEntry.receivedBestChallenge: ${JSON.stringify(
+        } challenge received and processing. queueEntry.receivedBestChallenge: ${Utils.safeStringify(
           queueEntry.receivedBestChallenge
         )}`
       )
@@ -3019,7 +3028,7 @@ class TransactionConsenus {
         this.mainLogger.debug(
           `tryAppendMessage: ${
             queueEntry.logID
-          } challenge received and processed. queueEntry.receivedBestChallenge: ${JSON.stringify(
+          } challenge received and processed. queueEntry.receivedBestChallenge: ${Utils.safeStringify(
             queueEntry.receivedBestChallenge
           )}, receivedBestChallenger: ${queueEntry.receivedBestChallenger}`
         )
@@ -3068,9 +3077,9 @@ class TransactionConsenus {
     } else {
       if (queueEntry.acceptVoteMessage === false || queueEntry.appliedReceipt2 != null) {
         if (queueEntry.acceptVoteMessage === false)
-          this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f no_accept`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f no_accept`)
         if (queueEntry.appliedReceipt2 != null)
-          this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f applied2_not_null`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f applied2_not_null`)
         return false
       }
       /* prettier-ignore */ if (logFlags.playback) this.logger.playbackLogNote('tryAppendVote', `${queueEntry.logID}`, `vote: ${utils.stringifyReduce(vote)}`)
@@ -3081,14 +3090,14 @@ class TransactionConsenus {
         this.crypto.verify(vote as SignedObject, queueEntry.executionGroupMap.get(vote.node_id).publicKey)
 
       if (!isEligibleToVote) {
-        this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f not_eligible`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f not_eligible`)
         if (logFlags.debug) {
           this.mainLogger.debug(
             `tryAppendVote: logId:${
               queueEntry.logID
-            } received node is not part of eligible nodes to vote, vote: ${utils.stringify(
+            } received node is not part of eligible nodes to vote, vote: ${Utils.safeStringify(
               vote
-            )}, eligibleNodesToVote: ${utils.stringify(queueEntry.eligibleNodeIdsToVote)}`
+            )}, eligibleNodesToVote: ${Utils.safeStringify(queueEntry.eligibleNodeIdsToVote)}`
           )
         }
         return
@@ -3118,8 +3127,8 @@ class TransactionConsenus {
           receivedVoter = queueEntry.executionGroupMap.get(vote.node_id) as Shardus.NodeWithRank
         }
         isBetterThanCurrentVote = receivedVoter.rank > queueEntry.receivedBestVoter.rank
-        this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV ${receivedVoter.rank} > ${queueEntry.receivedBestVoter.rank}`)
-        this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV ${NodeList.activeIdToPartition.get(receivedVoter.id)} : ${NodeList.activeIdToPartition.get(queueEntry.receivedBestVoter.id)}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV ${receivedVoter.rank} > ${queueEntry.receivedBestVoter.rank}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV ${NodeList.activeIdToPartition.get(receivedVoter.id)} : ${NodeList.activeIdToPartition.get(queueEntry.receivedBestVoter.id)}`)
       }
 
       if (!isBetterThanCurrentVote) {
@@ -3129,9 +3138,9 @@ class TransactionConsenus {
           )
         }
         if (receivedVoter)
-          this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f worser_voter ${NodeList.activeIdToPartition.get(receivedVoter.id)}`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f worser_voter ${NodeList.activeIdToPartition.get(receivedVoter.id)}`)
         else
-          this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f worser_voter`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f worser_voter`)
         return false
       }
 
@@ -3145,17 +3154,17 @@ class TransactionConsenus {
       }
       if (receivedVoter) {
         queueEntry.receivedBestVoter = receivedVoter
-        this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:t receivedVoter ${NodeList.activeIdToPartition.get(receivedVoter.id)}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:t receivedVoter ${NodeList.activeIdToPartition.get(receivedVoter.id)}`)
         return true
       } else {
         if (queueEntry.executionGroupMap.has(vote.node_id)) {
           queueEntry.receivedBestVoter = queueEntry.executionGroupMap.get(
             vote.node_id
           ) as Shardus.NodeWithRank
-          this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:t receivedVoter2 ${NodeList.activeIdToPartition.get(queueEntry.receivedBestVoter.id)}`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:t receivedVoter2 ${NodeList.activeIdToPartition.get(queueEntry.receivedBestVoter.id)}`)
           return true
         }
-        this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f no_receivedVoter`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f no_receivedVoter`)
         return false
       }
       // No need to forward the gossip here as it's being done in the gossip handler

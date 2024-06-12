@@ -25,6 +25,7 @@ import { RequestErrorEnum } from '../types/enum/RequestErrorEnum'
 import { getStreamWithTypeCheck, requestErrorHandler } from '../types/Helpers'
 import { TypeIdentifierEnum } from '../types/enum/TypeIdentifierEnum'
 import { InternalError, ResponseError, serializeResponseError } from '../types/ResponseError'
+import { Utils } from '@shardus/types'
 
 /** ROUTES */
 
@@ -145,7 +146,7 @@ function _authenticateByNode(message, node) {
       ? crypto.verify(message, node.publicKey)
       : crypto.authenticate(message, node.curvePublicKey)
   } catch (e) {
-    /* prettier-ignore */ if (logFlags.verbose) error(`Invalid or missing authentication/signature tag on message: ${JSON.stringify(message)}`)
+    /* prettier-ignore */ if (logFlags.verbose) error(`Invalid or missing authentication/signature tag on message: ${Utils.safeStringify(message)}`)
     return false
   }
   return result
@@ -155,7 +156,7 @@ function _authenticateByNode(message, node) {
 // This method could have done a complete deserialization into the specific type but,
 // that is avoided as we want to delay parsing of payload until header checks succeed.
 function _extractPayloadBinary(wrappedPayload): Buffer {
-  /* prettier-ignore */ if (logFlags.verbose) console.log('_extractPayloadBinary: wrappedPayload', JSON.stringify(wrappedPayload))
+  /* prettier-ignore */ if (logFlags.verbose) console.log('_extractPayloadBinary: wrappedPayload', Utils.safeStringify(wrappedPayload))
   let buffer = null
   if (wrappedPayload instanceof Buffer) {
     /* prettier-ignore */ if (logFlags.verbose) info(`_extractPayloadBinary: wrappedPayload is a buffer: ${wrappedPayload}`)
@@ -182,7 +183,7 @@ function _extractPayloadBinary(wrappedPayload): Buffer {
 function _extractPayload(wrappedPayload, nodeGroup) {
   let err = utils.validateTypes(wrappedPayload, { error: 's?' })
   if (err) {
-    warn('extractPayload: bad wrappedPayload: ' + err + ' ' + JSON.stringify(wrappedPayload))
+    warn('extractPayload: bad wrappedPayload: ' + err + ' ' + Utils.safeStringify(wrappedPayload))
     return [null]
   }
   if (wrappedPayload.error) {
@@ -207,7 +208,7 @@ function _extractPayload(wrappedPayload, nodeGroup) {
         }
   )
   if (err) {
-    warn('extractPayload: bad wrappedPayload: ' + err + ' ' + JSON.stringify(wrappedPayload))
+    warn('extractPayload: bad wrappedPayload: ' + err + ' ' + Utils.safeStringify(wrappedPayload))
     return [null]
   }
   // Check to see if node is in expected node group
@@ -422,7 +423,7 @@ export async function ask(
     const [response] = _extractPayload(respWithAuth, [node])
     if (!response) {
       throw new Error(
-        `Unable to verify response to ask request: ${route} -- ${JSON.stringify(message)} from node: ${
+        `Unable to verify response to ask request: ${route} -- ${Utils.safeStringify(message)} from node: ${
           node.id
         }`
       )
@@ -477,13 +478,13 @@ export async function askBinary<TReq, TResp>(
     ))
   } catch (err) {
     nestedCountersInstance.countEvent('comms-route', `askBinary ${route} request error`)
-    /* prettier-ignore */ console.log(`P2P: askBinary: network.askBinary: route: ${route} request: ${utils.SerializeToJsonString(message)} error: ${err}`)
-    /* prettier-ignore */ error(`P2P: askBinary: network.askBinary: route: ${route} request: ${utils.SerializeToJsonString(message)} error: ${err}`)
+    /* prettier-ignore */ console.log(`P2P: askBinary: network.askBinary: route: ${route} request: ${Utils.safeStringify(message)} error: ${err}`)
+    /* prettier-ignore */ error(`P2P: askBinary: network.askBinary: route: ${route} request: ${Utils.safeStringify(message)} error: ${err}`)
     throw err
   }
   try {
     if (!res)
-      /* prettier-ignore */ throw new Error(`Empty response to askBinary request: ${route} -- ${JSON.stringify(message)} from node: ${node.id}`)
+      /* prettier-ignore */ throw new Error(`Empty response to askBinary request: ${route} -- ${Utils.safeStringify(message)} from node: ${node.id}`)
 
     if (header && sign)
       if (header.sender_id !== node.id || sign.owner !== node.publicKey) {
@@ -499,8 +500,8 @@ export async function askBinary<TReq, TResp>(
       nestedCountersInstance.countEvent('comms-route', `askBinary ${route} error ${err.Code}`)
     } else {
       nestedCountersInstance.countEvent('comms-route', `askBinary ${route} response error`)
-      /* prettier-ignore */ error(`P2P: askBinary: response extraction route: ${route} res: ${utils.SerializeToJsonString(res)} error: ${err}`)
-      /* prettier-ignore */ console.log(`P2P: askBinary: response extraction route: ${route} res: ${utils.SerializeToJsonString(res)} error: ${err}`)
+      /* prettier-ignore */ error(`P2P: askBinary: response extraction route: ${route} res: ${Utils.safeStringify(res)} error: ${err}`)
+      /* prettier-ignore */ console.log(`P2P: askBinary: response extraction route: ${route} res: ${Utils.safeStringify(res)} error: ${err}`)
     }
     throw err
   }
@@ -624,16 +625,15 @@ export function registerInternalBinary(route: string, handler: InternalBinaryHan
         await respond(wrappedRespStream.getBuffer(), responseHeaders)
         return wrappedRespStream.getBufferLength()
       } catch (err: unknown) {
-        /* prettier-ignore */ error(`registerInternalBinary: route: ${route} responseHeaders: ${JSON.stringify(responseHeaders)}, Response: ${utils.SerializeToJsonString(response)}, Error: ${utils.formatErrorMessage(err)}`)
+        /* prettier-ignore */ error(`registerInternalBinary: route: ${route} responseHeaders: ${Utils.safeStringify(responseHeaders)}, Response: ${Utils.safeStringify(response)}, Error: ${utils.formatErrorMessage(err)}`)
         /* prettier-ignore */ nestedCountersInstance.countEvent('registerInternalBinary', `respondWrapped ${route} error`)
         return 0
       }
     }
     /* prettier-ignore */ if (logFlags.verbose && logFlags.p2pNonFatal) console.log('header:', header)
-    /* prettier-ignore */ if (logFlags.verbose && logFlags.p2pNonFatal) info(`registerInternalBinary: request info: route: ${route} header: ${JSON.stringify(header)} sign: ${JSON.stringify(sign)}`)
+    /* prettier-ignore */ if (logFlags.verbose && logFlags.p2pNonFatal) info(`registerInternalBinary: request info: route: ${route} header: ${Utils.safeStringify(header)} sign: ${Utils.safeStringify(sign)}`)
     if (
-      !NodeList.byPubKey.has(sign.owner) &&
-      !NodeList.nodes.has(header.sender_id) &&
+      (!NodeList.byPubKey.has(sign.owner) || !NodeList.nodes.has(header.sender_id)) &&
       !config.debug.enableTestMode
     ) {
       warn('registerInternalBinary: internal routes can only be used by nodes in the network...')
@@ -690,7 +690,7 @@ export function isNodeValidForInternalMessage(
 ): boolean {
   const logErrors = logFlags.debug
   if (node == null) {
-    seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} null`)
+    /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} null`)
     if (logErrors)
       if (logFlags.error)
         /* prettier-ignore */ error(`isNodeValidForInternalMessage node == null ${utils.stringifyReduce(node.id)} ${debugMsg}`)
@@ -700,7 +700,7 @@ export function isNodeValidForInternalMessage(
   // Some modes are not compatible with doing a valid node check for outgoing messages
   // if that is the case just return true and allow the message
   if (modeAllowsValidNodeChecks() === false) {
-    seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} nochecks`)
+    /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} nochecks`)
     return true
   }
 
@@ -718,10 +718,10 @@ export function isNodeValidForInternalMessage(
 
   // Also may add a flag to change if we also allow other statuses
   if (nodeStatus != 'active') {
-    seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} notactive`)
+    /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} notactive`)
   }
   if (NodeList.potentiallyRemoved.has(node.id)) {
-    seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} remove`)
+    /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} remove`)
   }
 
   // This is turned off and likely to be deleted.
@@ -737,7 +737,7 @@ export function isNodeValidForInternalMessage(
   //
   //const isInRotationBounds = checkNodesRotationBounds && isNodeInRotationBounds(node.id)
   //if (isInRotationBounds) {
-  //  seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} rotation`)    
+  //  /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} rotation`)    
   //  return false
   //}
 
@@ -782,7 +782,7 @@ export function isNodeValidForInternalMessage(
       if (logErrors)
         if (logFlags.error)
           /* prettier-ignore */ error(`isNodeValidForInternalMessage isNodeDown == true state:${state} ${utils.stringifyReduce(node.id)} ${debugMsg}`)
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} down`)    
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} down`)    
       return false
     }
   }
@@ -791,7 +791,7 @@ export function isNodeValidForInternalMessage(
       if (logErrors)
         if (logFlags.error)
           /* prettier-ignore */ error(`isNodeValidForInternalMessage isNodeLost == true ${utils.stringifyReduce(node.id)} ${debugMsg}`)
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} lost`)    
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} lost`)    
       return false
     }
   }
@@ -914,20 +914,20 @@ export async function sendGossip(
   //console.log('originIdx ', originIdx)
 
   if (context != '')
-    seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipContext:${context}`)
+    /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipContext:${context}`)
   if (originIdx !== undefined && originIdx >= 0) {
     // If it is protocol tx signed by a node in the network
     recipientIdxs = utils.getLinearGossipBurstList(nodeIdxs.length, gossipFactor, myIdx, originIdx)
     if (logFlags.seqdiagram && txId != '') {
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipBin:${nodeIdxs.length},${gossipFactor},${myIdx},${originIdx}`)
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipBout:${recipientIdxs}`)
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipBin:${nodeIdxs.length},${gossipFactor},${myIdx},${originIdx}`)
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipBout:${recipientIdxs}`)
     }
   } else {
     // If it is app tx which is not signed by a node in the network
     recipientIdxs = utils.getLinearGossipList(nodeIdxs.length, gossipFactor, myIdx, isOrigin)
     if (logFlags.seqdiagram && txId != '') {
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipLin:${nodeIdxs.length},${gossipFactor},${myIdx},${isOrigin}`)
-      seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipLout:${recipientIdxs}`)
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipLin:${nodeIdxs.length},${gossipFactor},${myIdx},${isOrigin}`)
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipLout:${recipientIdxs}`)
     }
   }
 
@@ -983,7 +983,7 @@ export async function sendGossip(
         } else {
           /* prettier-ignore */ nestedCountersInstance.countEvent('p2p-skip-send', 'skipping gossip')
           /* prettier-ignore */ nestedCountersInstance.countEvent( 'p2p-skip-send', `skipping gossip ${node.internalIp}:${node.externalPort}` )
-          seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipSkip:${NodeList.activeIdToPartition.get(node.id)}:${node.internalIp}:${node.externalPort}`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipSkip:${NodeList.activeIdToPartition.get(node.id)}:${node.internalIp}:${node.externalPort}`)
         }
       })
       const newCount = recipients.length
@@ -1005,7 +1005,7 @@ export async function sendGossip(
       if (context != '')
         suffix = `:${suffix}`
       for (const node of recipients) {        
-        seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: g:${prefix}${type}${suffix}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: g:${prefix}${type}${suffix}`)
       }
     }
     
@@ -1166,7 +1166,7 @@ export async function handleGossip(payload, sender, tracker = '', msgSize = cNoS
 
   const gossipHandler = gossipHandlers[type]
   if (!gossipHandler) {
-    warn(`Gossip Handler not found: type ${type}, data: ${JSON.stringify(data)}`)
+    warn(`Gossip Handler not found: type ${type}, data: ${Utils.safeStringify(data)}`)
     return
   }
 
@@ -1260,8 +1260,8 @@ function pruneGossipHashes() {
   //  warn(`gossipedHashesRecv:${gossipedHashesRecv.size} gossipedHashesSent:${gossipedHashesSent.size}`)
   if (logFlags.p2pNonFatal) {
     info(`Total  gossipSent:${gossipSent} gossipRecv:${gossipRecv}`)
-    info(`Sent gossip by type: ${JSON.stringify(gossipTypeSent)}`)
-    info(`Recv gossip by type: ${JSON.stringify(gossipTypeRecv)}`)
+    info(`Sent gossip by type: ${Utils.safeStringify(gossipTypeSent)}`)
+    info(`Recv gossip by type: ${Utils.safeStringify(gossipTypeRecv)}`)
   }
 }
 

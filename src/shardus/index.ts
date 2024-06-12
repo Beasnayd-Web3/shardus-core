@@ -78,7 +78,7 @@ import {
   deserializeSignAppDataResp,
   serializeSignAppDataResp,
 } from '../types/SignAppDataResp'
-import { safeStringify } from '../utils'
+import { Utils } from '@shardus/types'
 import { isNodeInRotationBounds } from '../p2p/Utils'
 import ShardFunctions from '../state-manager/shardFunctions'
 import SocketIO from 'socket.io'
@@ -142,16 +142,15 @@ interface Shardus {
 class Shardus extends EventEmitter {
   constructor(
     { server: config, logs: logsConfig, storage: storageConfig }: ShardusTypes.StrictShardusConfiguration,
-    opts?: { customStringifier?: (val: any) => string }
   ) {
     super()
     this.debugForeverLoopsEnabled = true
     this.debugForeverLoopCounter = 0
     this.nestedCounters = nestedCountersInstance
     this.memoryReporting = new MemoryReporting(this)
-    this.profiler = new Profiler()
     this.config = config
     Context.setConfig(this.config)
+    this.profiler = new Profiler()
     logFlags.verbose = false
 
     let startInFatalsLogMode = config && config.debug && config.debug.startInFatalsLogMode ? true : false
@@ -183,7 +182,7 @@ class Shardus extends EventEmitter {
     Context.setStorageContext(this.storage)
     this.crypto = new Crypto(config.baseDir, this.config, this.logger, this.storage)
     Context.setCryptoContext(this.crypto)
-    this.network = new Network.NetworkClass(config, this.logger, opts?.customStringifier)
+    this.network = new Network.NetworkClass(config, this.logger)
     Context.setNetworkContext(this.network)
 
     // Set the old P2P to a Wrapper into the new P2P
@@ -614,7 +613,7 @@ class Shardus extends EventEmitter {
 
     if (!isServiceMode()) this.statistics.on('snapshot', () => this.loadDetection.updateLoad())
 
-    this.rateLimiting = new RateLimiting(this.config.rateLimiting, this.loadDetection, this.seqLogger)
+    this.rateLimiting = new RateLimiting(this.config.rateLimiting, this.seqLogger)
 
     if (this.app) {
       this._createAndLinkStateManager()
@@ -1325,13 +1324,13 @@ class Shardus extends EventEmitter {
   ): Promise<{ success: boolean; reason: string; status: number, txId?: string }> {
     const noConsensus = set || global
     const txId = this.app.calculateTxId(tx);
-    this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: inject:${shardusGetTime()}`)
+    /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: inject:${shardusGetTime()}`)
 
     // Check if Consensor is ready to receive txs before processing it further
     if (!this.appProvided)
       throw new Error('Please provide an App object to Shardus.setup before calling Shardus.put')
     if (logFlags.verbose)
-      this.mainLogger.debug(`Start of injectTransaction ${JSON.stringify(tx)} set:${set} global:${global}`) // not reducing tx here so we can get the long hashes
+      this.mainLogger.debug(`Start of injectTransaction ${Utils.safeStringify(tx)} set:${set} global:${global}`) // not reducing tx here so we can get the long hashes
     if (!this.stateManager.accountSync.dataSyncMainPhaseComplete) {
       this.statistics.incrementCounter('txRejected')
       nestedCountersInstance.countEvent('rejected', '!dataSyncMainPhaseComplete')
@@ -1352,7 +1351,7 @@ class Shardus extends EventEmitter {
           // This ok because we are initializing a global at the set time period
         } else {
           if (logFlags.verbose)
-            this.mainLogger.debug(`txRejected ${JSON.stringify(tx)} set:${set} global:${global}`)
+            this.mainLogger.debug(`txRejected ${Utils.safeStringify(tx)} set:${set} global:${global}`)
 
           this.statistics.incrementCounter('txRejected')
           nestedCountersInstance.countEvent('rejected', '!allowTransactions')
@@ -1375,7 +1374,7 @@ class Shardus extends EventEmitter {
       }
     }
     if (this.rateLimiting.isOverloaded(txId)) {
-      this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: reject_overload`)
+      /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: reject_overload`)
       this.statistics.incrementCounter('txRejected')
       nestedCountersInstance.countEvent('rejected', 'isOverloaded')
       return { success: false, reason: 'Maximum load exceeded.', status: 500 }
@@ -1406,7 +1405,7 @@ class Shardus extends EventEmitter {
       }
 
       const senderAddress = this.app.getTxSenderAddress(tx);
-      this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: sender:${senderAddress}`)
+      /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: sender:${senderAddress}`)
       // Forward transaction to a node that has the account data locally if we don't have it
       if (global === false) {
         if (senderAddress == null) {
@@ -1436,14 +1435,14 @@ class Shardus extends EventEmitter {
         }
       }
 
-      // we are consensus lucky node for this tx      
+      // we are consensus lucky node for this tx
       let shouldAddToNonceQueue = false;
       let txNonce;
       if (internalTx === false) {
         let senderAccountNonce = await this.app.getAccountNonce(senderAddress);
         txNonce = await this.app.getNonceFromTx(tx);
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: sNonce:${senderAccountNonce}`)
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: txNonce:${txNonce}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: sNonce:${senderAccountNonce}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: txNonce:${txNonce}`)
 
         if (senderAccountNonce == null) {
           if (this.config.mode === ShardusTypes.ServerMode.Release) {
@@ -1512,7 +1511,7 @@ class Shardus extends EventEmitter {
 
       //ITN fix. There will be separate effort to protect the pool more intelligently for mainnet.
       if(shouldQueueNonceButPoolIsFull) {
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: reject_nonce_full`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: reject_nonce_full`)
         nestedCountersInstance.countEvent('rejected', `Nonce pool is full, try again later`)
         return {
           success: false,
@@ -1541,7 +1540,7 @@ class Shardus extends EventEmitter {
             success: true,
             reason: `Transaction added to pending nonce queue.`,
             status: 200
-          }            
+          }
         }
       } else {
         // tx nonce is equal to account nonce
@@ -1578,7 +1577,7 @@ class Shardus extends EventEmitter {
     if (homeNode == null) {
       return { success: false, reason: `Home node not found for account ${senderAddress}`, status: 500 }
     }
-    /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `forwardTransactionToLuckyNodes: homeNode: ${homeNode.node.id} closetNodeIds: ${JSON.stringify( closetNodeIds.sort() )}` )
+    /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `forwardTransactionToLuckyNodes: homeNode: ${homeNode.node.id} closetNodeIds: ${Utils.safeStringify( closetNodeIds.sort() )}` )
 
     let selectedValidators = []
     if (Self.id != homeNode.node.id)
@@ -1588,7 +1587,7 @@ class Shardus extends EventEmitter {
         port: homeNode.node.externalPort,
         publicKey: homeNode.node.publicKey,
       })
-    this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_homenode_${context} ${activeIdToPartition.get(homeNode.node.id)}`)
+    /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_homenode_${context} ${activeIdToPartition.get(homeNode.node.id)}`)
 
     let  stats ={
       skippedSelf:0,
@@ -1597,7 +1596,7 @@ class Shardus extends EventEmitter {
     }
 
     for (const id of closetNodeIds) {
-      this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_closetnode_${context} ${activeIdToPartition.get(id)}`)
+      /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_closetnode_${context} ${activeIdToPartition.get(id)}`)
       if (id === Self.id) {
         stats.skippedSelf++
         continue
@@ -1605,13 +1604,13 @@ class Shardus extends EventEmitter {
       if (id === homeNode.node.id){
         stats.skippedHome++
         continue // we already added the home node
-      } 
+      }
       let node = nodes.get(id)
 
       //is this node safe in terms of rotation
-      let rotationCheckPassed = true 
+      let rotationCheckPassed = true
       if(Context.config.stateManager.forwardToLuckyNodesCheckRotation) {
-        //is in rotation means it in the edge 
+        //is in rotation means it in the edge
         rotationCheckPassed = isNodeInRotationBounds(id) === false
       }
 
@@ -1631,40 +1630,40 @@ class Shardus extends EventEmitter {
     }
     for (const validator of selectedValidators) {
       try {
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_req_${context} ${activeIdToPartition.get(validator.id)}`)
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_req_${context} ${activeIdToPartition.get(validator.id)}`)
 
         if (validator.id === homeNode.node.id) {
-          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Forwarding injected tx ${txId} to home node ${validator.id} reason: ${message} ${utils.stringify(tx)}` )
+          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Forwarding injected tx ${txId} to home node ${validator.id} reason: ${message} ${Utils.safeStringify(tx)}` )
           nestedCountersInstance.countEvent('statistics', `forwardTxToHomeNode: ${message}`)
         } else {
-          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Forwarding injected tx ${txId} to consensus group. reason: ${message} ${utils.stringify(tx)}` )
+          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Forwarding injected tx ${txId} to consensus group. reason: ${message} ${Utils.safeStringify(tx)}` )
           nestedCountersInstance.countEvent('statistics', `forwardTxToConsensusGroup: ${message}`)
         }
-        
+
         const result: ShardusTypes.InjectTxResponse = await this.app.injectTxToConsensor([validator], tx)
 
         if (result == null) {
-          this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_null_${context} ${activeIdToPartition.get(validator.id)}`)
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_null_${context} ${activeIdToPartition.get(validator.id)}`)
           /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got null/undefined response upon forwarding injected tx: ${txId} to node ${validator.id}` )
           continue
         }
         if (result && result.success === false) {
-          this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_false_${context} ${activeIdToPartition.get(validator.id)}`)
-          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got unsuccessful response upon forwarding injected tx: ${validator.id}. ${message} ${utils.stringify(tx)}` )
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_false_${context} ${activeIdToPartition.get(validator.id)}`)
+          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got unsuccessful response upon forwarding injected tx: ${validator.id}. ${message} ${Utils.safeStringify(tx)}` )
           continue
         }
         if (result && result.success === true) {
-          this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_success_${context} ${activeIdToPartition.get(validator.id)}`)
-          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got successful response upon forwarding injected tx: ${validator.id}. ${message} ${utils.stringify(tx)}` )
+          /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_success_${context} ${activeIdToPartition.get(validator.id)}`)
+          /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.debug( `Got successful response upon forwarding injected tx: ${validator.id}. ${message} ${Utils.safeStringify(tx)}` )
           return { success: true, reason: 'Transaction forwarded to validators', status: 200 }
         }
       } catch (e) {
-        this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_ex_${context} ${activeIdToPartition.get(validator.id)}`)
-        /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.error( `Forwarding injected tx to ${validator.id} failed. ${message} ${utils.stringify(tx)} error: ${ e.stack }` )
+        /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${txId} Note over ${activeIdToPartition.get(Self.id)}: lucky_forward_ex_${context} ${activeIdToPartition.get(validator.id)}`)
+        /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.error( `Forwarding injected tx to ${validator.id} failed. ${message} ${Utils.safeStringify(tx)} error: ${ e.stack }` )
       }
     }
-    nestedCountersInstance.countEvent('statistics', `forward failed: ${JSON.stringify(stats)}`)
-    /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.error( `Forwarding injected tx out of tries. ${JSON.stringify(stats)} ${utils.stringify(tx)} ` )
+    nestedCountersInstance.countEvent('statistics', `forward failed: ${Utils.safeStringify(stats)}`)
+    /* prettier-ignore */ if (logFlags.debug || logFlags.rotation) this.mainLogger.error( `Forwarding injected tx out of tries. ${Utils.safeStringify(stats)} ${Utils.safeStringify(tx)} ` )
     return { success: false, reason: 'No validators found to forward the transaction', status: 500 }
   }
 
@@ -2145,7 +2144,7 @@ class Shardus extends EventEmitter {
       if (req.query.set) {
         this.debugForeverLoopsEnabled = req.query.set === 'true'
       }
-      res.send(utils.safeStringify(`debugForeverLoopsEnabled: ${this.debugForeverLoopsEnabled}`))
+      res.send(`debugForeverLoopsEnabled: ${this.debugForeverLoopsEnabled}`)
     })
   }
 
@@ -2680,7 +2679,7 @@ class Shardus extends EventEmitter {
       } else {
         console.log('binarySerializeObject not implemented')
         applicationInterfaceImpl.binarySerializeObject = (identifier: string, obj: any): Buffer => {
-          return Buffer.from(utils.SerializeToJsonString(obj), 'utf8')
+          return Buffer.from(Utils.safeStringify(obj), 'utf8')
         }
       }
       if (typeof application.binaryDeserializeObject === 'function') {
@@ -2693,7 +2692,7 @@ class Shardus extends EventEmitter {
       } else {
         console.log('binaryDeserializeObject not implemented')
         applicationInterfaceImpl.binaryDeserializeObject = (identifier: string, buffer: Buffer): any => {
-          return utils.DeSerializeFromJsonString(buffer.toString('utf8'))
+          return Utils.safeJsonParse(buffer.toString('utf8'))
         }
       }
       if (typeof application.getTxSenderAddress === 'function') {
@@ -2728,20 +2727,20 @@ class Shardus extends EventEmitter {
   _registerRoutes() {
     // DEBUG routes
     this.network.registerExternalPost('exit', isDebugModeMiddlewareHigh, async (req, res) => {
-      res.send(safeStringify({ success: true }))
+      res.send({ success: true })
       await this.shutdown()
     })
     // TODO elevate security beyond high when we get multi sig.  or is that too slow when needed?
     this.network.registerExternalPost('exit-apop', isDebugModeMiddlewareHigh, async (req, res) => {
       apoptosizeSelf('Apoptosis called at exit-apop route')
-      res.send(safeStringify({ success: true }))
+      res.send({ success: true })
     })
 
     this.network.registerExternalGet('config', isDebugModeMiddlewareLow, async (req, res) => {
-      res.send(safeStringify({ config: this.config }))
+      res.send({ config: this.config })
     })
     this.network.registerExternalGet('netconfig', async (req, res) => {
-      res.send(safeStringify({ config: netConfig }))
+      res.send({ config: netConfig })
     })
 
     this.network.registerExternalGet('nodeInfo', async (req, res) => {
@@ -2762,7 +2761,7 @@ class Shardus extends EventEmitter {
           lostArchiversMap: lostArchiversMap,
         }
       }
-      res.send(safeStringify(result))
+      res.send(result)
     })
 
     this.network.registerExternalGet('joinInfo', isDebugModeMiddlewareMedium, async (req, res) => {
@@ -2783,7 +2782,7 @@ class Shardus extends EventEmitter {
         getLastHashedStandbyList: JoinV2.getLastHashedStandbyList(),
         getSortedStandbyNodeList: JoinV2.getSortedStandbyJoinRequests(),
       }
-      res.send(safeStringify(deepReplace(result, undefined, '__undefined__')))
+      res.send(deepReplace(result, undefined, '__undefined__'))
     })
 
     this.network.registerExternalGet('standby-list-debug', isDebugModeMiddlewareLow, async (req, res) => {
@@ -2793,21 +2792,21 @@ class Shardus extends EventEmitter {
         ip: node.nodeInfo.externalIp,
         port: node.nodeInfo.externalPort,
       }))
-      res.send(safeStringify(result))
+      res.send(result)
     })
 
     this.network.registerExternalGet('status-history', isDebugModeMiddlewareLow, async (req, res) => {
       let result = Self.getStatusHistoryCopy()
-      res.send(safeStringify(deepReplace(result, undefined, '__undefined__')))
+      res.send(deepReplace(result, undefined, '__undefined__'))
     })
 
     this.network.registerExternalGet('socketReport', isDebugModeMiddlewareLow, async (req, res) => {
-      res.send(safeStringify(await getSocketReport()))
+      res.send(await getSocketReport())
     })
     this.network.registerExternalGet('forceCycleSync', isDebugModeMiddleware, async (req, res) => {
       let enable = req.query.enable === 'true' || false
       config.p2p.hackForceCycleSyncComplete = enable
-      res.send(safeStringify(await getSocketReport()))
+      res.send(await getSocketReport())
     })
 
     this.p2p.registerInternal(
@@ -2875,7 +2874,7 @@ class Shardus extends EventEmitter {
         this.mainLogger.debug(`testGlobalAccountTX: req:${utils.stringifyReduce(req.body)}`)
         const tx = req.body.tx
         this.put(tx, false, true)
-        res.send(safeStringify({ success: true }))
+        res.send({ success: true })
       } catch (ex) {
         this.mainLogger.debug('testGlobalAccountTX:' + ex.name + ': ' + ex.message + ' at ' + ex.stack)
         this.shardus_fatal(
@@ -2890,7 +2889,7 @@ class Shardus extends EventEmitter {
         this.mainLogger.debug(`testGlobalAccountTXSet: req:${utils.stringifyReduce(req.body)}`)
         const tx = req.body.tx
         this.put(tx, true, true)
-        res.send(safeStringify({ success: true }))
+        res.send({ success: true })
       } catch (ex) {
         this.mainLogger.debug('testGlobalAccountTXSet:' + ex.name + ': ' + ex.message + ' at ' + ex.stack)
         this.shardus_fatal(
@@ -3009,6 +3008,7 @@ class Shardus extends EventEmitter {
 
       this.p2p.configUpdated()
       this.loadDetection.configUpdated()
+      this.rateLimiting.configUpdated()
     }
   }
 
@@ -3061,7 +3061,7 @@ class Shardus extends EventEmitter {
       scopedReport.cycle = lastCycle.counter
       scopedReport.node = `${Self.ip}:${Self.port}`
       scopedReport.id = utils.makeShortHash(Self.id)
-      nestedCountersInstance.countRareEvent('scopedTimeReport', JSON.stringify(scopedReport))
+      nestedCountersInstance.countRareEvent('scopedTimeReport', Utils.safeStringify(scopedReport))
     }
   }
 

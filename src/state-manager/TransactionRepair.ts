@@ -18,6 +18,7 @@ import { RequestStateForTxPostResp, deserializeRequestStateForTxPostResp } from 
 import { InternalRouteEnum } from '../types/enum/InternalRouteEnum'
 import * as NodeList from '../p2p/NodeList'
 import * as Self from '../p2p/Self'
+import { Utils } from '@shardus/types'
 
 class TransactionRepair {
   app: Shardus.App
@@ -151,13 +152,13 @@ class TransactionRepair {
       }
       if (receivedReceipt.result === false) {
         nestedCountersInstance.countEvent('repair1', 'receivedReceipt.result is false')
-        /* prettier-ignore */  if (logFlags.debug) this.mainLogger.debug(`receivedReceipt.result is false for queueEntry: ${JSON.stringify(queueEntry)}`)
+        /* prettier-ignore */  if (logFlags.debug) this.mainLogger.debug(`receivedReceipt.result is false for queueEntry: ${Utils.safeStringify(queueEntry)}`)
         return
       }
       const appliedVote = queueEntry?.appliedReceiptForRepair2?.appliedVote
       if(!appliedVote) {
         nestedCountersInstance.countEvent('repair1', 'appliedVote is falsy')
-        /* prettier-ignore */  if (logFlags.debug) this.mainLogger.debug(`appliedVote is undefined for queueEntry: ${JSON.stringify(queueEntry)}`)
+        /* prettier-ignore */  if (logFlags.debug) this.mainLogger.debug(`appliedVote is undefined for queueEntry: ${Utils.safeStringify(queueEntry)}`)
         return
       }
 
@@ -573,7 +574,7 @@ class TransactionRepair {
                   this.config.p2p.requestStateForTxPostBinary
                 ) {
                   const request = message as RequestStateForTxPostReq
-                  if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_state_for_tx_post'}`)
+                  /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455101 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'request_state_for_tx_post'}`)
                   // GOLD-65 This only has a try /finally.  repairToMatchReceipt is called in several places so it is better hanlde the error here
                   result = await this.p2p.askBinary<RequestStateForTxPostReq, RequestStateForTxPostResp>(
                     node,
