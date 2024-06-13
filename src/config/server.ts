@@ -291,7 +291,7 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     waitTimeBeforeReceipt: 200,
     waitLimitAfterFirstVote: 2000,
     waitLimitAfterFirstMessage: 2000,
-    minRequiredChallenges: 1,
+    minRequiredChallenges: 2,
     useNewPOQ: false,
     forwardToLuckyNodes: true,
     forwardToLuckyNodesNonceQueue: false,
@@ -315,12 +315,13 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     disableTxExpiration: true,
     removeStuckTxsFromQueue: false,
     stuckTxRemoveTime: 1000 * 60 * 2, // 2 minutes
+    stuckTxMoveTime: 5 * 60 * 1000, // 5 minute
     removeStuckChallengedTXs: true,
     receiptRemoveFix: true,
     stuckTxQueueFix: true,
-    singleAccountStuckFix: true,
-    stuckTxMoveTime: 60000,
-    forceVoteForFailedPreApply: true
+    forceVoteForFailedPreApply: true,
+    keepMultipleBestChallenges: true,
+    singleAccountStuckFix: true
   },
   sharding: { nodesPerConsensusGroup: 5, nodesPerEdge: 2, executeInOneShard: false },
   mode: ServerMode.Debug,
