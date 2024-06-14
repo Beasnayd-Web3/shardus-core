@@ -944,6 +944,8 @@ export interface ServerConfiguration {
     formingNodesPerCycle: number
     // /** Enables or disables filtering nodes from internal gossip if they are marked down. */
     downNodeFilteringEnabled: boolean
+    /** Enable optimized binary search and sorted insertion logic */
+    enableBinarySearchOptimization?: boolean
   }
   /** Server IP configuration */
   ip?: {
@@ -1216,7 +1218,7 @@ export interface ServerConfiguration {
     // state machine chages updateTxState in several places from 'consensing' to 'await final data'
     txStateMachineChanges: boolean
     // will a node attempt to request final data
-    canRequestFinalData:boolean
+    canRequestFinalData: boolean
     // how many node to re-inject the tx received from client
     numberOfReInjectNodes: number
     // max number of pending nonce tx for an account
