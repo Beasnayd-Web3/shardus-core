@@ -986,24 +986,28 @@ class TransactionQueue {
       if (queue == null || (Array.isArray(queue) && queue.length === 0)) {
         queue = [nonceQueueEntry]
         this.nonceQueue.set(nonceQueueEntry.accountId, queue)
-        if (logFlags.debug) this.mainLogger.debug(`adding new nonce tx: ${nonceQueueEntry.txId} ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}`)
+        this.mainLogger.debug(`DEBUG: Adding new nonce tx: ${nonceQueueEntry.txId} ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}`)
       } else if (queue && queue.length > 0) {
+        this.mainLogger.debug(`DEBUG: Processing queue for account ${nonceQueueEntry.accountId} with existing length ${queue.length}`)
         if (useBinarySearch) {
           // New logic with binary search and sorted insertion
           const index = utils.binarySearch(queue, nonceQueueEntry, (a, b) => Number(a.nonce) - Number(b.nonce))
+          this.mainLogger.debug(`DEBUG: Binary search result index: ${index} for nonce ${nonceQueueEntry.nonce}`)
           if (index != -1) {
             // there is existing item with the same nonce. replace it with the new one
             queue[index] = nonceQueueEntry
             this.nonceQueue.set(nonceQueueEntry.accountId, queue)
             nestedCountersInstance.countEvent('processing', 'replaceExistingNonceTx')
-            if (logFlags.debug) this.mainLogger.debug(`replace existing nonce tx ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}, txId: ${nonceQueueEntry.txId}`)
+            this.mainLogger.debug(`DEBUG: Replaced existing nonce tx ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}, txId: ${nonceQueueEntry.txId}`)
             return { success: true, reason: 'Replace existing pending nonce tx' }
           }
           // add new item to the queue
           utils.insertSorted(queue, nonceQueueEntry, (a, b) => Number(a.nonce) - Number(b.nonce));
           this.nonceQueue.set(nonceQueueEntry.accountId, queue)
+          this.mainLogger.debug(`DEBUG: Inserted new nonce tx sorted into queue for ${nonceQueueEntry.accountId}`)
         } else {
           // Old logic with linear search and manual sorting
+          this.mainLogger.debug(`DEBUG: Starting linear search for nonce ${nonceQueueEntry.nonce}`)
           for (let i = 0; i < queue.length; i++) {
             if (queue[i].nonce === nonceQueueEntry.nonce) {
               // there is existing item with the same nonce. replace it with the new one
@@ -1011,7 +1015,7 @@ class TransactionQueue {
               queue = queue.sort((a, b) => Number(a.nonce) - Number(b.nonce))
               this.nonceQueue.set(nonceQueueEntry.accountId, queue)
               nestedCountersInstance.countEvent('processing', 'replaceExistingNonceTx')
-              if (logFlags.debug) this.mainLogger.debug(`replace existing nonce tx ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}, txId: ${nonceQueueEntry.txId}`)
+              this.mainLogger.debug(`DEBUG: Replaced existing nonce tx at index ${i} for ${nonceQueueEntry.accountId}`)
               return { success: true, reason: 'Replace existing pending nonce tx' }
             }
           }
@@ -1019,6 +1023,7 @@ class TransactionQueue {
           queue.push(nonceQueueEntry);
           queue = queue.sort((a, b) => Number(a.nonce) - Number(b.nonce));
           this.nonceQueue.set(nonceQueueEntry.accountId, queue);
+          this.mainLogger.debug(`DEBUG: Added new nonce tx to end and sorted queue for ${nonceQueueEntry.accountId}`)
         }
       }
       /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455106 ${shardusGetTime()} tx:${nonceQueueEntry.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: pause_nonceQ`)
