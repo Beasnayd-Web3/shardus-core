@@ -3,21 +3,17 @@ import * as utils from '../../../utils'
 import * as http from '../../../http'
 import { ok, Result } from 'neverthrow'
 import { logFlags } from '../../../logger'
-import { JoinRequest, KeepInStandby } from '@shardus/types/build/src/p2p/JoinTypes'
-import { getStandbyNodesInfoMap } from './index'
+import { JoinRequest, StandbyRefreshRequest } from '@shardus/types/build/src/p2p/JoinTypes'
+import {  isOnStandbyList } from './index'
 import * as CycleChain from '../../CycleChain'
 import { crypto } from '../../Context'
 import { SignedObject } from '@shardus/types/build/src/p2p/P2PTypes'
 import { config } from '../../Context'
-import rfdc from 'rfdc'
-
-//const clone = rfdc()
 
 type publickey = JoinRequest['nodeInfo']['publicKey']
-let newStandbyRefreshRequests: Map<publickey, KeepInStandby> = new Map()
-//let lastCycleStandbyRefreshRequests: Map<publickey, KeepInStandby> = new Map()
+let newStandbyRefreshRequests: Map<publickey, StandbyRefreshRequest> = new Map()
 
-export async function submitStandbyRefresh(publicKey: string, cycleNumber: number): Promise<Result<void, Error>> {
+export async function submitStandbyRefresh(publicKey: string): Promise<Result<void, Error>> {
   const archiver = getRandomAvailableArchiver()
   try {
     const activeNodesResult = await getActiveNodesFromArchiver(archiver);
@@ -25,13 +21,6 @@ export async function submitStandbyRefresh(publicKey: string, cycleNumber: numbe
       throw Error(`couldn't get active nodes: ${activeNodesResult.error}`);
     }
     const activeNodes = activeNodesResult.value;
-
-    let payload = {
-      publicKey: publicKey,
-      cycleNumber: cycleNumber,
-    };
-    payload = crypto.sign(payload);
-
     const maxRetries = 3;
     let attempts = 0;
     const queriedNodesPKs = []
@@ -47,8 +36,8 @@ export async function submitStandbyRefresh(publicKey: string, cycleNumber: numbe
         } while(queriedNodesPKs.includes(node.publicKey));
         queriedNodesPKs.push(node.publicKey);
 
-        await http.post(`${node.ip}:${node.port}/standby-refresh`, payload);
-        return ok(void 0); // Success, exit the function
+        await http.post(`${node.ip}:${node.port}/standby-refresh`, { publicKey })
+        return ok(void 0)
       } catch (e) {
         console.error(`Attempt ${attempts + 1} failed: ${e}`);
         attempts++;
@@ -64,35 +53,34 @@ export async function submitStandbyRefresh(publicKey: string, cycleNumber: numbe
   }
 }
 
-//KeepInStandby
 export interface StandbyRefreshRequestResponse {
   success: boolean
   reason: string
   fatal: boolean
 }
 
-export function addStandbyRefresh(keepInStandbyRequest: KeepInStandby): StandbyRefreshRequestResponse {
+export function addStandbyRefresh(standbyRefreshRequest: StandbyRefreshRequest): StandbyRefreshRequestResponse {
   // validate keepInStandbyRequest
-  if (getStandbyNodesInfoMap().has(keepInStandbyRequest.publicKey) === false) {
+  if (!isOnStandbyList(standbyRefreshRequest.publicKey)) {
     return {
       success: false,
       reason: 'Node not found in standby list',
-      fatal: true,
+      fatal: false,
     }
   }
 
   // cycle number check
   const cycleNumber = CycleChain.getNewest().counter
-  if (cycleNumber !== keepInStandbyRequest.cycleNumber) {
+  if (cycleNumber !== standbyRefreshRequest.cycleNumber) {
     return {
       success: false,
-      reason: 'cycle number in keepInStandby request does not match current cycle number',
+      reason: 'cycle number in StandbyRefreshRequest request does not match current cycle number',
       fatal: false,
     }
   }
 
   //add it to TXs
-  if (newStandbyRefreshRequests.has(keepInStandbyRequest.publicKey) === true) {
+  if (newStandbyRefreshRequests.has(standbyRefreshRequest.publicKey) === true) {
     return {
       success: false,
       reason: 'Node already in standby refresh list',
@@ -100,7 +88,7 @@ export function addStandbyRefresh(keepInStandbyRequest: KeepInStandby): StandbyR
     }
   }
 
-  if (!crypto.verify(keepInStandbyRequest as unknown as SignedObject, keepInStandbyRequest.sign.owner)) {
+  if (!crypto.verify(standbyRefreshRequest as unknown as SignedObject, standbyRefreshRequest.sign.owner)) {
     return {
       success: false,
       reason: 'verification of syncStarted request failed',
@@ -108,43 +96,21 @@ export function addStandbyRefresh(keepInStandbyRequest: KeepInStandby): StandbyR
     }
   }
 
-  newStandbyRefreshRequests.set(keepInStandbyRequest.publicKey, keepInStandbyRequest)
+  newStandbyRefreshRequests.set(standbyRefreshRequest.publicKey, standbyRefreshRequest)
 
   return {
     success: true,
-    reason: 'keepInStandbyRequest passed all checks and verification',
+    reason: 'standbyRefreshRequest passed all checks and verification',
     fatal: false,
   }
 }
 
 /**
- * Returns the list of new KeepInStandby requests and empties the list.
+ * Returns the list of new StandbyRefreshRequest requests and empties the list.
  */
-
-export function drainNewStandbyRefreshRequests(): KeepInStandby[] {
-  if (logFlags.verbose) console.log('draining new KeepInStandby info:', newStandbyRefreshRequests)
-  //lastCycleStandbyRefreshRequests = deepCloneMap(newStandbyRefreshRequests)
+export function drainNewStandbyRefreshRequests(): StandbyRefreshRequest[] {
+  if (logFlags.verbose) console.log('draining new StandbyRefreshRequest info:', newStandbyRefreshRequests)
   const tmp = Array.from(newStandbyRefreshRequests.values())
   newStandbyRefreshRequests = new Map()
   return tmp
 }
-
-/*
-export function getLastCycleStandbyRefreshRequest(publicKey: publickey): KeepInStandby {
-  return lastCycleStandbyRefreshRequests.get(publicKey)
-}
-
-export function resetLastCycleStandbyRefreshRequests(): void {
-  lastCycleStandbyRefreshRequests = new Map()
-}
-
-function deepCloneMap(originalMap: Map<any, any>): Map<any, any> {
-  const clonedMap = new Map();
-  originalMap.forEach((value, key) => {
-    const clonedKey = clone(key); // Clone the key
-    const clonedValue = clone(value); // Clone the value
-    clonedMap.set(clonedKey, clonedValue);
-  });
-  return clonedMap;
-}
-*/

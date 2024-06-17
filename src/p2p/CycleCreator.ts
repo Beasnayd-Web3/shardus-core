@@ -47,6 +47,7 @@ import { getStreamWithTypeCheck, requestErrorHandler } from '../types/Helpers'
 import { RequestErrorEnum } from '../types/enum/RequestErrorEnum'
 import { BadRequest, InternalError, NotFound, serializeResponseError } from '../types/ResponseError'
 import { Utils } from '@shardus/types'
+import { nodeListFromStates } from './Join'
 
 /** CONSTANTS */
 
@@ -110,6 +111,7 @@ export let netConfig: any = {}
 let createCycleTag = 0
 
 let madeCycle = false // True if we successfully created the last cycle record, otherwise false
+
 // not used anymore
 //let madeCert = false // set to True after we make our own cert and try to gossip it
 
@@ -471,8 +473,6 @@ async function cycleCreator() {
 
     /* prettier-ignore */ if (logFlags.verbose) info(`cc: scheduling currentCycle:${currentCycle} ${callTag} ${startQ1}`)
 
-    if (config.debug.cycleRecordOOSDebugLogs) console.log(`CycleCreator: Cycle ${currentCycle} started`)
-
     schedule(runQ1, startQ1, { runEvenIfLateBy: quarterDuration - 1 * SECOND }) // if there's at least one sec before Q2 starts, we can start Q1 now
     schedule(runQ2, startQ2)
     schedule(runQ3, startQ3)
@@ -634,6 +634,7 @@ async function runQ3() {
  */
 async function runQ4() {
   currentQuarter = 4
+
   if (logFlags.p2pNonFatal) info(`C${currentCycle} Q${currentQuarter}`)
 
   /* prettier-ignore */ info(`Q4: start: C${currentCycle} Q${currentQuarter}`)
@@ -816,9 +817,9 @@ async function fetchLatestRecord(): Promise<P2P.CycleCreatorTypes.CycleRecord> {
       fetchLatestRecordFails++
       if (fetchLatestRecordFails > maxFetchLatestRecordFails) {
         /* prettier-ignore */ error( 'CycleCreator: fetchLatestRecord_A: fetchLatestRecordFails > maxFetchLatestRecordFails. apoptosizeSelf ' )
-        fatal(
-          'CycleCreator: fetchLatestRecord_A: fetchLatestRecordFails > maxFetchLatestRecordFails. apoptosizeSelf '
-        )
+        // this.fatalLogger.fatal(
+        //   'CycleCreator: fetchLatestRecord_A: fetchLatestRecordFails > maxFetchLatestRecordFails. apoptosizeSelf '
+        // )
         nestedCountersInstance.countEvent('fetchLatestRecord', `fetchLatestRecord_A fail and apop self. ${shardusGetTime()}`)
         Apoptosis.apoptosizeSelf('Apoptosized within fetchLatestRecord() => src/p2p/CycleCreator.ts')
       }
@@ -830,10 +831,10 @@ async function fetchLatestRecord(): Promise<P2P.CycleCreatorTypes.CycleRecord> {
     fetchLatestRecordFails++
     if (fetchLatestRecordFails > maxFetchLatestRecordFails) {
       /* prettier-ignore */ error( 'CycleCreator: fetchLatestRecord_B: fetchLatestRecordFails > maxFetchLatestRecordFails. apoptosizeSelf ' )
-      fatal(
-        'CycleCreator: fetchLatestRecord_B: fetchLatestRecordFails > maxFetchLatestRecordFails. apoptosizeSelf ',
-        utils.formatErrorMessage(err)
-      )
+      // this.fatalLogger.fatal(
+      //   'CycleCreator: fetchLatestRecord_B: fetchLatestRecordFails > maxFetchLatestRecordFails. apoptosizeSelf ',
+      //   utils.formatErrorMessage(err)
+      // )
       nestedCountersInstance.countEvent('fetchLatestRecord', `fetchLatestRecord_B fail and apop self. ${shardusGetTime()}`)
       Apoptosis.apoptosizeSelf('Apoptosized within fetchLatestRecord() => src/p2p/CycleCreator.ts')
     }
@@ -1282,7 +1283,18 @@ async function gossipCycleCert(sender: P2P.NodeListTypes.Node['id'], tracker?: s
     record: bestRecord,
   }
   const signedCertGossip = crypto.sign(certGossip)
-  Comms.sendGossip('gossip-cert', signedCertGossip, tracker, sender, NodeList.byIdOrder, true)
+  Comms.sendGossip(
+    'gossip-cert',
+    signedCertGossip,
+    tracker,
+    sender,
+    nodeListFromStates([
+      P2P.P2PTypes.NodeStatus.ACTIVE,
+      P2P.P2PTypes.NodeStatus.READY,
+      P2P.P2PTypes.NodeStatus.SYNCING,
+    ]),
+    true
+  )
 }
 
 function pruneCycleChain() {

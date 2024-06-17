@@ -3,7 +3,7 @@ import { P2P } from '@shardus/types'
 import { Logger } from 'log4js'
 import { isDebugModeMiddleware, isDebugModeMiddlewareLow } from '../network/debugMiddleware'
 import { ShardusEvent } from '../shardus/shardus-types'
-import { binarySearch, getTime, insertSorted, propComparator, propComparator2 } from '../utils'
+import { binarySearch, getTime, insertSorted, linearInsertSorted, propComparator, propComparator2 } from '../utils'
 import * as Comms from './Comms'
 import { config, crypto, logger, network } from './Context'
 import * as CycleChain from './CycleChain'
@@ -33,6 +33,8 @@ export let othersByIdOrder: P2P.NodeListTypes.Node[] // used by sendGossipIn
 export let activeByIdOrder: P2P.NodeListTypes.Node[]
 export let activeIdToPartition: Map<string, number>
 export let syncingByIdOrder: P2P.NodeListTypes.Node[]
+export let selectedByIdOrder: P2P.NodeListTypes.Node[]
+export let standbyByIdOrder: P2P.NodeListTypes.Node[]
 export let readyByTimeAndIdOrder: P2P.NodeListTypes.Node[]
 export let activeOthersByIdOrder: P2P.NodeListTypes.Node[]
 export let potentiallyRemoved: Set<P2P.NodeListTypes.Node['id']>
@@ -84,6 +86,8 @@ export function reset(caller: string) {
   activeByIdOrder = []
   activeIdToPartition = new Map()
   syncingByIdOrder = []
+  selectedByIdOrder = []
+  standbyByIdOrder = []
   readyByTimeAndIdOrder = []
   activeOthersByIdOrder = []
   potentiallyRemoved = new Set()
@@ -112,7 +116,7 @@ export function addNode(node: P2P.NodeListTypes.Node, caller: string) {
   // in the past this used joinRequestTimestamp, but joinRequestTimestamp now is the time when a node is put into
   // the standbylist
   // this will contain nodes that are selected, syncing, ready, and active
-  insertSorted(byJoinOrder, node, propComparator2('syncingTimestamp', 'id'))
+  linearInsertSorted(byJoinOrder, node, propComparator2('syncingTimestamp', 'id'))
 
   // Insert sorted by id into byIdOrder
   insertSorted(byIdOrder, node, propComparator('id'))
@@ -122,8 +126,13 @@ export function addNode(node: P2P.NodeListTypes.Node, caller: string) {
     insertSorted(othersByIdOrder, node, propComparator('id'))
   }
 
+  // If standby, insert into standbyByIdOrder
+  if (node.status === P2P.P2PTypes.NodeStatus.STANDBY) {
+    insertSorted(standbyByIdOrder, node, propComparator('id'))
+  }
   // If selected, insert into selectedByIdOrder
   if (node.status === P2P.P2PTypes.NodeStatus.SELECTED) {
+    insertSorted(selectedByIdOrder, node, propComparator('id'))
     selectedById.set(node.id, node.counterRefreshed)
   }
 
@@ -134,7 +143,7 @@ export function addNode(node: P2P.NodeListTypes.Node, caller: string) {
 
   // If node is READY status, insert sorted by readyTimestamp and id to tiebreak into readyByTimeAndIdOrder
   if (node.status === P2P.P2PTypes.NodeStatus.READY) {
-    insertSorted(readyByTimeAndIdOrder, node, propComparator2('readyTimestamp', 'id'))
+    linearInsertSorted(readyByTimeAndIdOrder, node, propComparator2('readyTimestamp', 'id'))
   }
 
   // If active, insert sorted by id into activeByIdOrder
@@ -162,6 +171,9 @@ export function addNodes(newNodes: P2P.NodeListTypes.Node[], caller: string) {
 
 export function removeSelectedNode(id: string) {
   selectedById.delete(id)
+  const idx = binarySearch(selectedByIdOrder, { id }, propComparator('id'))
+  /* prettier-ignore */ if (logFlags.verbose) console.log('Removing selected node', id, idx)
+  if (idx >= 0) selectedByIdOrder.splice(idx, 1)
 }
 
 export function removeSyncingNode(id: string) {
@@ -197,6 +209,12 @@ export function removeNode(
   }
 
   // Remove from arrays
+  idx = binarySearch(selectedByIdOrder, { id }, propComparator('id'))
+  if (idx >= 0) selectedByIdOrder.splice(idx, 1)
+
+  idx = binarySearch(standbyByIdOrder, { id }, propComparator('id'))
+  if (idx >= 0) standbyByIdOrder.splice(idx, 1)
+
   idx = binarySearch(activeOthersByIdOrder, { id }, propComparator('id'))
   if (idx >= 0) activeOthersByIdOrder.splice(idx, 1)
 
@@ -292,24 +310,21 @@ export function updateNode(
     // Update node properties
     for (const key of Object.keys(update)) {
       node[key] = update[key]
-      // add node to syncing list if its status is changed to syncing
-      if (update[key] === P2P.P2PTypes.NodeStatus.SYNCING) {
-        insertSorted(syncingByIdOrder, node, propComparator('id'))
-        removeSelectedNode(node.id)
-      }
-      if (update[key] === P2P.P2PTypes.NodeStatus.READY) {
-        insertSorted(readyByTimeAndIdOrder, node, propComparator2('readyTimestamp', 'id'))
-        if (config.p2p.hardenNewSyncingProtocol) {
-          if (selectedById.has(node.id)) removeSelectedNode(node.id) // in case we missed the sync-started gossip
-        }
-        removeSyncingNode(node.id)
-      }
     }
-    //test if this node is in the active list already.  if it is not, then we can add it
-    let idx = binarySearch(activeByIdOrder, { id: node.id }, propComparator('id'))
-    if (idx < 0) {
-      // Add the node to active arrays, if needed
-      if (update.status === P2P.P2PTypes.NodeStatus.ACTIVE) {
+    // add node to syncing list if its status is changed to syncing
+    if (update.status === P2P.P2PTypes.NodeStatus.SYNCING) {
+      insertSorted(syncingByIdOrder, node, propComparator('id'))
+      removeSelectedNode(node.id)
+    } else if (update.status === P2P.P2PTypes.NodeStatus.READY) {
+      linearInsertSorted(readyByTimeAndIdOrder, node, propComparator2('readyTimestamp', 'id'))
+      if (config.p2p.hardenNewSyncingProtocol) {
+        if (selectedById.has(node.id)) removeSelectedNode(node.id) // in case we missed the sync-started gossip
+      }
+      removeSyncingNode(node.id)
+    } else if (update.status === P2P.P2PTypes.NodeStatus.ACTIVE) {
+      //test if this node is in the active list already.  if it is not, then we can add it
+      let idx = binarySearch(activeByIdOrder, { id: node.id }, propComparator('id'))
+      if (idx < 0) {
         insertSorted(activeByIdOrder, node, propComparator('id'))
         for (let i = 0; i < activeByIdOrder.length; i++) {
           activeIdToPartition.set(activeByIdOrder[i].id, i)

@@ -28,7 +28,6 @@ import { ActiveNode } from '@shardus/types/build/src/p2p/SyncTypes'
 import { Result } from 'neverthrow'
 const deepCopy = rfdc()
 import { isServiceMode } from '../debug'
-import { insertSyncStarted } from './Join/v2/syncStarted'
 import { submitStandbyRefresh } from './Join/v2/standbyRefresh'
 import { getNumArchivers } from './Archivers'
 import { currentQuarter } from './CycleCreator'
@@ -185,44 +184,10 @@ export function startupV2(): Promise<boolean> {
         // Should fire after being accepted into the network
         emitter.emit('joined', id, publicKey)
 
-        console.log('node id: ', id)
-
         nestedCountersInstance.countEvent('p2p', 'joined')
         // Sync cycle chain from network
         await syncCycleChain(id)
-
-        let waited = false
-        // if syncCycleChain takes really long time and its not q1 anymore, wait till next cycle's q1 to send sync-started gossip
-        if (currentQuarter > 1) {
-          nestedCountersInstance.countEvent('p2p', `not in Q1 after waiting. Current quarter: ${CycleCreator.currentQuarter}`)
-          /* prettier-ignore */ if (logFlags.verbose) console.log(`not is Q1 after waiting. Current quarter: ${CycleCreator.currentQuarter}`)
-          waited = true
-        }
-        if(currentQuarter > 0){
-          await waitForQ1SendRequests()
-        }
-
-        if(waited) {
-          nestedCountersInstance.countEvent('p2p', `in Q1 after waiting. Current quarter: ${CycleCreator.currentQuarter}`)
-          /* prettier-ignore */ if (logFlags.verbose) console.log(`in Q1 after waiting. Current quarter: ${CycleCreator.currentQuarter}`)
-        }
-
-        let payload = {
-          nodeId: id,
-          cycleNumber: CycleChain.getNewest()?.counter,
-        }
-        payload = Context.crypto.sign(payload)
-        // send a sync-started message to the network if you are not the first node
-        if (isFirst) {
-          nestedCountersInstance.countEvent('p2p', `adding sync-started message for first node`)
-          /* prettier-ignore */ if (logFlags.verbose) console.log(`adding sync-started message for first node`)
-          console.log('isFirst', id, 'NodeList.selectedById', NodeList.selectedById)
-          insertSyncStarted(id)
-        } else {
-          nestedCountersInstance.countEvent('p2p', `sending sync-started gossip to network`)
-          /* prettier-ignore */ if (logFlags.verbose) console.log(`sending sync-started gossip to network`)
-          Comms.sendGossip('gossip-sync-started', payload)
-        }
+        Join.queueStartedSyncingRequest()
 
         // Enable internal routes
         Comms.setAcceptInternal(true)
@@ -231,20 +196,6 @@ export function startupV2(): Promise<boolean> {
         await CycleCreator.startCycles()
         p2pSyncEnd = shardusGetTime()
         p2pJoinTime = (p2pSyncEnd - p2pSyncStart) / 1000
-        // send a sync-finished message to the network if you are the first node when promised is resoolved from CycleCreator.startCycles()
-        // if (isFirst) {
-        //   insertSyncFinished(id)
-        //   nestedCountersInstance.countEvent('p2p', `adding sync-finished message for first node`)
-        //   /* prettier-ignore */ if (logFlags.verbose) console.log(`adding sync-finished message for first node`)
-        // } else {
-        //   //Payload that is gossiped after node has synced
-        //   let readyPayload = {
-        //     nodeId: id,
-        //     cycleNumber: CycleChain.getNewest()?.counter,
-        //   }
-        //   readyPayload = Context.crypto.sign(readyPayload)
-        //   Comms.sendGossip('gossip-sync-finished', readyPayload)
-        // }
 
         nestedCountersInstance.countEvent('p2p', `sync time ${p2pJoinTime} seconds`)
 
@@ -378,27 +329,6 @@ export function startupV2(): Promise<boolean> {
           if (state !== P2P.P2PTypes.NodeStatus.STANDBY) {
             updateNodeState(P2P.P2PTypes.NodeStatus.STANDBY)
           }
-
-          /*
-          const p2pConfig = Context.config.p2p
-          if (joinRequestCopy) {
-            const lastRefreshed = joinRequestCopy.nodeInfo.refreshedCounter
-            if (latestCycle.counter >= (lastRefreshed + p2pConfig.standbyListCyclesTTL - (isFirstRefresh ? p2pConfig.cyclesToRefreshEarly : 0))) {
-              isFirstRefresh = false
-              // update the standbyRefreshTimestamp
-              joinRequestCopy.nodeInfo.refreshedCounter = latestCycle.counter
-
-              let payload = {
-                publicKey: publicKey,
-                cycleNumber: latestCycle.counter
-              }
-              payload = Context.crypto.sign(payload)
-              submitStandbyRefresh(payload)
-              nestedCountersInstance.countEvent('p2p', `submitted KeepInStandby request`)
-            }
-          }
-          */
-
           if (isFirstRefresh) {
             if (
               latestCycle.counter >=
@@ -408,19 +338,19 @@ export function startupV2(): Promise<boolean> {
             ) {
               isFirstRefresh = false
               //info(`startupV2: submitStandbyRefresh first ${latestCycle.counter}`)
-              submitStandbyRefresh(publicKey, latestCycle.counter)
+              submitStandbyRefresh(publicKey)
 
-              nestedCountersInstance.countEvent('p2p', `submitted KeepInStandby request`)
-              /* prettier-ignore */ if (logFlags.verbose) console.log(`submitted KeepInStandby request`)
+              nestedCountersInstance.countEvent('p2p', `submitted StandbyRefreshRequest request - first time`)
+              /* prettier-ignore */ if (logFlags.verbose) console.log(`submitted StandbyRefreshRequest request - first time`)
 
               cyclesElapsedSinceRefresh = 0
             }
           } else if (cyclesElapsedSinceRefresh >= Context.config.p2p.standbyListCyclesTTL) {
             //info(`startupV2: submitStandbyRefresh ${latestCycle.counter}`)
-            submitStandbyRefresh(publicKey, latestCycle.counter)
+            submitStandbyRefresh(publicKey)
 
-            nestedCountersInstance.countEvent('p2p', `submitted KeepInStandby request`)
-            /* prettier-ignore */ if (logFlags.verbose) console.log(`submitted KeepInStandby request`)
+            nestedCountersInstance.countEvent('p2p', `submitted StandbyRefreshRequest request`)
+            /* prettier-ignore */ if (logFlags.verbose) console.log(`submitted StandbyRefreshRequest request`)
 
             cyclesElapsedSinceRefresh = 0
           }

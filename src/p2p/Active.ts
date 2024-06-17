@@ -16,6 +16,7 @@ import { getSortedStandbyJoinRequests } from './Join/v2'
 import { selectNodesFromReadyList } from './Join/v2/syncFinished'
 import { isDebugModeMiddleware } from '../network/debugMiddleware'
 import { Utils } from '@shardus/types'
+import { nodeListFromStates } from "./Join";
 
 let syncTimes = []
 let lastCheckedCycleForSyncTimes = 0
@@ -65,7 +66,18 @@ const gossipActiveRoute: P2P.P2PTypes.GossipHandler<P2P.ActiveTypes.SignedActive
     }
 
     if (addActiveTx(payload)) {
-      Comms.sendGossip('gossip-active', payload, tracker, sender, NodeList.byIdOrder, false)
+      Comms.sendGossip(
+        'gossip-active',
+        payload,
+        tracker,
+        sender,
+        nodeListFromStates([
+          P2P.P2PTypes.NodeStatus.ACTIVE,
+          P2P.P2PTypes.NodeStatus.READY,
+          P2P.P2PTypes.NodeStatus.SYNCING,
+        ]),
+        false
+      )
     }
   } finally {
     profilerInstance.scopedProfileSectionEnd('gossip-active')
@@ -270,7 +282,18 @@ export function sendRequests() {
     if (addActiveTx(activeTx) === false) {
       /* prettier-ignore */ nestedCountersInstance.countEvent('p2p', `active:sendRequests failed to add our own request`)
     }
-    Comms.sendGossip('gossip-active', activeTx, '', null, NodeList.byIdOrder, true)
+    Comms.sendGossip(
+      'gossip-active',
+      activeTx,
+      '',
+      null,
+      nodeListFromStates([
+        P2P.P2PTypes.NodeStatus.ACTIVE,
+        P2P.P2PTypes.NodeStatus.READY,
+        P2P.P2PTypes.NodeStatus.SYNCING,
+      ]),
+      true
+    )
 
     // Check if we went active and try again if we didn't in 1 cycle duration
     const activeTimeout = setTimeout(requestActive, config.p2p.cycleDuration * 1000 + 500)

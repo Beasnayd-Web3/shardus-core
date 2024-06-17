@@ -31,6 +31,7 @@ export function calculateToAcceptV2(prevRecord: P2P.CycleCreatorTypes.CycleRecor
 
   let add = 0
   let remove = 0
+
   if (prevRecord) {
     if (prevRecord.mode === 'forming') {
       if (Self.isFirst && active < 1) {
