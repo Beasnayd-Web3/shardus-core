@@ -454,7 +454,7 @@ class TransactionConsenus {
 
     this.p2p.registerInternal(
       'get_applied_vote',
-      async (payload: AppliedVoteQuery, respond: (arg0: AppliedVoteQueryResponse) => unknown) => {        
+      async (payload: AppliedVoteQuery, respond: (arg0: AppliedVoteQueryResponse) => unknown) => {
         nestedCountersInstance.countEvent('consensus', 'get_applied_vote')
         const { txId } = payload
         let queueEntry = this.stateManager.transactionQueue.getQueueEntrySafe(txId)
@@ -1066,7 +1066,7 @@ class TransactionConsenus {
       txId,
       Context.stateManager.currentCycleShardData.parititionShardDataMap
     )
-    const cycleMarker = CycleChain.computeCycleMarker(CycleChain.newest)
+    const cycleMarker = CycleChain.getCurrentCycleMarker()
     const cycleCounter = CycleChain.newest.counter
     /* prettier-ignore */ if (logFlags.verbose) this.mainLogger.debug('Asking timestamp from node', homeNode.node)
 
@@ -1946,7 +1946,7 @@ class TransactionConsenus {
             )
             return rBin
           }
-          return await Comms.ask(node, 'get_applied_vote', queryData)          
+          return await Comms.ask(node, 'get_applied_vote', queryData)
         } catch (e) {
           this.mainLogger.error(`robustQueryBestVote: Failed query to node ${node.id} error: ${e.message}`)
           return {
@@ -3124,7 +3124,7 @@ class TransactionConsenus {
       let receivedVoter: Shardus.NodeWithRank
       if (!queueEntry.receivedBestVote){
         isBetterThanCurrentVote = true
-        //do not compare the hash we still need to allow gossip to flow if the hash is the 
+        //do not compare the hash we still need to allow gossip to flow if the hash is the
         //same but the vote is better.
       //else if (queueEntry.receivedBestVoteHash === this.calculateVoteHash(vote)){
       } else {
