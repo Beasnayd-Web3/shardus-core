@@ -399,7 +399,7 @@ class Reporter {
 
       //temp mem debugging:
       if (logFlags.important_as_fatal) this.mainLogger.info(memoryReportingInstance.getMemoryStringBasic())
-    }, 30000)
+    }, 300000)
 
     //log a socket report every 5 minutes
     this.socketReportInterval = setInterval(async () => {
