@@ -134,7 +134,7 @@ class TransactionQueue {
   _transactionQueue: QueueEntry[] //old name: newAcceptedTxQueue
   pendingTransactionQueue: QueueEntry[] //old name: newAcceptedTxQueueTempInjest
   archivedQueueEntries: QueueEntry[]
-  txDebugStatList: Map<string, TxDebug>
+  txDebugStatList: utils.FIFOCache<string, TxDebug>
 
   _transactionQueueByID: Map<string, QueueEntry> //old name: newAcceptedTxQueueByID
   pendingTransactionQueueByID: Map<string, QueueEntry> //old name: newAcceptedTxQueueTempInjestByID
@@ -229,7 +229,7 @@ class TransactionQueue {
     this.pendingTransactionQueue = []
     this.archivedQueueEntries = []
     this.nonceQueue = new Map()
-    this.txDebugStatList = new Map()
+    this.txDebugStatList = new utils.FIFOCache<string, TxDebug>(this.config.debug.debugStatListMaxSize)
     this.receiptsToForward = []
     this.forwardedReceiptsByTimestamp = new Map()
     this.receiptsBundleByInterval = new Map()
@@ -1631,8 +1631,8 @@ class TransactionQueue {
       this.profiler.profileSectionEnd('commit-2-addAccountStatesAndTX')
       this.profiler.profileSectionStart('commit-3-transactionReceiptPass')
       // endpoint to allow dapp to execute something that depends on a transaction being approved.
-      this.app.transactionReceiptPass(acceptedTX.data, wrappedStates, applyResponse)
-      /* prettier-ignore */ if (logFlags.verbose) console.log('transactionReceiptPass', acceptedTX.txId, queueEntry)
+      this.app.transactionReceiptPass(acceptedTX.data, wrappedStates, applyResponse, true)
+      /* prettier-ignore */ if (logFlags.verbose) console.log('transactionReceiptPass 2', acceptedTX.txId, queueEntry)
 
       this.profiler.profileSectionEnd('commit-3-transactionReceiptPass')
     } catch (ex) {
@@ -4473,7 +4473,7 @@ class TransactionQueue {
   }
 
   clearTxDebugStatList(): void {
-    this.txDebugStatList = new Map()
+    this.txDebugStatList.clear()
   }
 
   printTxDebugByTxId(txId: string): string {
@@ -4491,7 +4491,7 @@ class TransactionQueue {
 
   printTxDebug(): string {
     const collector = {}
-    const totalTxCount = this.txDebugStatList.size
+    const totalTxCount = this.txDebugStatList.size()
 
     const indexes = [
       'aging',
@@ -6215,6 +6215,9 @@ class TransactionQueue {
                   )
                   /* prettier-ignore */ this.setDebugLastAwaitedCall( 'this.stateManager.transactionConsensus.checkAndSetAccountData()', DebugComplete.Completed )
                   queueEntry.accountDataSet = true
+                  // endpoint to allow dapp to execute something that depends on a transaction being approved.
+                  this.app.transactionReceiptPass(queueEntry.acceptedTx.data, queueEntry.collectedFinalData, queueEntry?.preApplyTXResult?.applyResponse, false)
+                  /* prettier-ignore */ if (logFlags.verbose) console.log('transactionReceiptPass 1', queueEntry.acceptedTx.txId, queueEntry)
                   this.updateSimpleStatsObject(
                     processStats.awaitStats,
                     'checkAndSetAccountData',

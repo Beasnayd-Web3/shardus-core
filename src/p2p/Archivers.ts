@@ -34,6 +34,7 @@ import { ActiveNode } from '@shardus/types/build/src/p2p/SyncTypes'
 import { Result, ResultAsync } from 'neverthrow'
 import { Utils } from '@shardus/types'
 import { arch } from 'os'
+import { nodelistFromStates } from './Join'
 
 const clone = rfdc()
 
@@ -318,7 +319,18 @@ export function addArchiverJoinRequest(joinRequest: P2P.ArchiversTypes.Request, 
       joinRequest
     )
   if (gossip === true) {
-    Comms.sendGossip('joinarchiver', joinRequest, tracker, null, NodeList.byIdOrder, true)
+    Comms.sendGossip(
+      'joinarchiver',
+      joinRequest,
+      tracker,
+      null,
+      nodelistFromStates([
+        P2P.P2PTypes.NodeStatus.ACTIVE,
+        P2P.P2PTypes.NodeStatus.READY,
+        P2P.P2PTypes.NodeStatus.SYNCING,
+      ]),
+      true
+    )
   }
   return { success: true }
 }
@@ -427,7 +439,18 @@ export function addLeaveRequest(leaveRequest: P2P.ArchiversTypes.Request, tracke
   leaveRequests.push(leaveRequest)
   if (logFlags.console) console.log('adding leave requests', leaveRequests)
   if (gossip === true) {
-    Comms.sendGossip('leavingarchiver', leaveRequest, tracker, null, NodeList.byIdOrder, true)
+    Comms.sendGossip(
+      'leavingarchiver',
+      leaveRequest,
+      tracker,
+      null,
+      nodelistFromStates([
+        P2P.P2PTypes.NodeStatus.ACTIVE,
+        P2P.P2PTypes.NodeStatus.READY,
+        P2P.P2PTypes.NodeStatus.SYNCING,
+      ]),
+      true
+    )
   }
   return { success: true }
 }
@@ -938,7 +961,18 @@ export function registerRoutes() {
       }
       if (!accepted.success) return warn('Archiver join request not accepted.')
       if (logFlags.p2pNonFatal) info('Archiver join request accepted!')
-      Comms.sendGossip('joinarchiver', payload, tracker, sender, NodeList.byIdOrder, false)
+      Comms.sendGossip(
+        'joinarchiver',
+        payload,
+        tracker,
+        sender,
+        nodelistFromStates([
+          P2P.P2PTypes.NodeStatus.ACTIVE,
+          P2P.P2PTypes.NodeStatus.READY,
+          P2P.P2PTypes.NodeStatus.SYNCING,
+        ]),
+        false
+      )
     } finally {
       profilerInstance.scopedProfileSectionEnd('joinarchiver')
     }
@@ -957,7 +991,18 @@ export function registerRoutes() {
       const accepted = await addLeaveRequest(payload, tracker, false)
       if (!accepted.success) return warn('Archiver leave request not accepted.')
       /* prettier-ignore */ if (logFlags.p2pNonFatal) info('Archiver leave request accepted!')
-      Comms.sendGossip('leavingarchiver', payload, tracker, sender, NodeList.byIdOrder, false)
+      Comms.sendGossip(
+        'leavingarchiver',
+        payload,
+        tracker,
+        sender,
+        nodelistFromStates([
+          P2P.P2PTypes.NodeStatus.ACTIVE,
+          P2P.P2PTypes.NodeStatus.READY,
+          P2P.P2PTypes.NodeStatus.SYNCING,
+        ]),
+        false
+      )
     } finally {
       profilerInstance.scopedProfileSectionEnd('leavingarchiver')
     }
