@@ -35,7 +35,6 @@ class Debug {
     const cwd = process.cwd()
     const filesRel = {}
     for (const src in this.files) {
-      // Normalize path for trie
       const srcRel = path.relative(cwd, src).replace(/\\/g, '/')
       const dest = this.files[src]
       filesRel[srcRel] = dest
@@ -45,7 +44,6 @@ class Debug {
     const pack = tar.pack(cwd, {
       entries,
       map: function (header) {
-        // Normalize path for comparison
         let entry = header.name.replace(/\\/g, '/')
         // Find the closest entry for this item
         while (!trie.isPrefix(entry) && entry.length > 0) {
