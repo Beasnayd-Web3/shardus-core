@@ -2114,7 +2114,7 @@ class TransactionQueue {
             if (node.id === ourID) {
               txQueueEntry.ourExGroupIndex = idx
               /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: executor index ${txQueueEntry.ourExGroupIndex}:${(node as Shardus.NodeWithRank).rank}`)
-            }            
+            }
           }
           if (txQueueEntry.eligibleNodeIdsToConfirm.has(Self.id)) {
             /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455105 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: confirmator`)
@@ -2311,7 +2311,7 @@ class TransactionQueue {
                       this.stateManager.config.p2p.spreadTxToGroupSyncingBinary
                     ) {
                       if (logFlags.seqdiagram) {
-                        for (const node of this.stateManager.currentCycleShardData.syncingNeighborsTxGroup) {                
+                        for (const node of this.stateManager.currentCycleShardData.syncingNeighborsTxGroup) {
                           /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${acceptedTx.txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'spread_tx_to_group_syncing'}`)
                         }
                       }
@@ -3916,7 +3916,7 @@ class TransactionQueue {
             /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_state_nodes'}`)
           } else {
             /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_state_neighbour'}`)
-          }        
+          }
         }
       }
       this.p2p.tellBinary<BroadcastStateReq>(
@@ -4438,7 +4438,7 @@ class TransactionQueue {
             // convert legacy message to binary supported type
             const request = message as BroadcastFinalStateReq
             if (logFlags.seqdiagram) {
-              for (const node of filterdCorrespondingAccNodes) {                
+              for (const node of filterdCorrespondingAccNodes) {
                 /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455102 ${shardusGetTime()} tx:${message.txid} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: ${'broadcast_finalstate'}`)
               }
             }
@@ -5179,7 +5179,8 @@ class TransactionQueue {
                 ' commit the tx')
               continue
             }
-          } else if (txAge > timeM3 + configContext.stateManager.voteSeenExpirationTime && hasSeenVote && !hasSeenConfirmation) {
+          }
+          if (txAge > timeM3 + configContext.stateManager.voteSeenExpirationTime && hasSeenVote && !hasSeenConfirmation) {
             if (configContext.stateManager.disableTxExpiration === false) {
               nestedCountersInstance.countEvent('txExpired', `> timeM3 + voteSeenExpirationTime`)
               this.mainLogger.error(`${queueEntry.logID} txAge > timeM3 + voteSeenExpirationTime general case has vote but fail to generate receipt`)
@@ -5188,7 +5189,8 @@ class TransactionQueue {
                 ' commit the tx')
               continue
             }
-          } else if (txAge > timeM3 + configContext.stateManager.noVoteSeenExpirationTime && !hasSeenVote) {
+          }
+          if (txAge > timeM3 + configContext.stateManager.noVoteSeenExpirationTime && !hasSeenVote) {
             // seen no vote but past timeM3 + noVoteSeenExpirationTime
             nestedCountersInstance.countEvent('txExpired', `> timeM3 + noVoteSeenExpirationTime`)
             this.mainLogger.error(`${queueEntry.logID} txAge > timeM3 + noVoteSeenExpirationTime general case. no vote seen`)
@@ -5432,17 +5434,17 @@ class TransactionQueue {
                 }
                 nestedCountersInstance.countEvent('processing', 'busy waiting the upstream tx.' +
                   ' but it is null')
-              } else {                
+              } else {
                 if (upstreamTx.logID === queueEntry.logID) {
                   /* prettier-ignore */ if (logFlags.seqdiagram && queueEntry?.upStreamBlocker !== upstreamTx.logID) {
                     queueEntry.upStreamBlocker = upstreamTx.logID
-                    this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: upstream:same`)                    
+                    this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: upstream:same`)
                   }
                   nestedCountersInstance.countEvent('processing', 'busy waiting the upstream tx but it is same txId')
                 } else {
                   /* prettier-ignore */ if (logFlags.seqdiagram && queueEntry?.upStreamBlocker !== upstreamTx.logID) {
                     queueEntry.upStreamBlocker = upstreamTx.logID
-                    this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: upstream:${upstreamTx.logID}`)                    
+                    this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: upstream:${upstreamTx.logID}`)
                   }
                   nestedCountersInstance.countEvent('processing', `busy waiting the upstream tx to complete. state ${queueEntry.state}`)
                 }
@@ -6834,7 +6836,7 @@ class TransactionQueue {
       return false
     }
     for (const key of queueEntry.uniqueKeys) {
-      // eslint-disable-next-line security/detect-object-injection      
+      // eslint-disable-next-line security/detect-object-injection
       if (seenAccounts[key] != null) {
         return true
       }
@@ -7592,7 +7594,7 @@ class TransactionQueue {
     if (logFlags.seqdiagram)
       if (context == '')
         /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: ${queueEntry.state}-${nextState}`)
-      else 
+      else
         /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455104 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: ${queueEntry.state}-${nextState}:${context}`)
     const currentState = queueEntry.state
     this.txDebugMarkEndTime(queueEntry, currentState)
