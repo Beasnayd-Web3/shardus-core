@@ -1085,6 +1085,8 @@ export interface ServerConfiguration {
     randomCycleData: boolean
     // Maximum number of elements allowed in txDebugStatList map
     debugStatListMaxSize: number
+    /** chance to fail before state in sending tx receipt to archiver */
+    beforeStateFailChance: number
   }
   /** Options for the statistics module */
   statistics?: {
