@@ -2591,6 +2591,9 @@ class Shardus extends EventEmitter {
           account: ShardusTypes.WrappedData,
           cycle: number
         ) => application.pruneNetworkChangeQueue(account, cycle)
+      } else {
+        // If the app doesn't provide pruneNetworkChangeQueue, just return empty arr
+        applicationInterfaceImpl.pruneNetworkChangeQueue = async (account, cycle) => []
       }
       if (typeof application.canStayOnStandby === 'function') {
         applicationInterfaceImpl.canStayOnStandby = (joinInfo: JoinRequest) =>
@@ -2922,6 +2925,7 @@ class Shardus extends EventEmitter {
       // )
       return
     }
+    const activeConfigChanges = new Set<string>()
     for (let change of changes) {
       //skip future changes
       if (change.cycle > lastCycle.counter) {
@@ -2930,10 +2934,12 @@ class Shardus extends EventEmitter {
       const changeHash = this.crypto.hash(change)
       //skip handled changes
       if (this.appliedConfigChanges.has(changeHash)) {
+        activeConfigChanges.add(changeHash)
         continue
       }
       //apply this change
       this.appliedConfigChanges.add(changeHash)
+      activeConfigChanges.add(changeHash)
       let changeObj = change.change
       let appData = change.appData
 
@@ -2953,6 +2959,14 @@ class Shardus extends EventEmitter {
       this.p2p.configUpdated()
       this.loadDetection.configUpdated()
       this.rateLimiting.configUpdated()
+    }
+    if (activeConfigChanges.size > 0) {
+      // clear the entries from appliedConfigChanges that are no longer in the changes list
+      for (let changeHash of this.appliedConfigChanges) {
+        if (!activeConfigChanges.has(changeHash)) {
+          this.appliedConfigChanges.delete(changeHash)
+        }
+      }
     }
   }
 
