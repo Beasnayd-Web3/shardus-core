@@ -6806,7 +6806,7 @@ class TransactionQueue {
     return [...this.forwardedReceiptsByTimestamp.values()]
   }
 
-  async requestFinalData(queueEntry: QueueEntry, accountIds: string[], includeAppReceiptData = false) {
+  async requestFinalData(queueEntry: QueueEntry, accountIds: string[], includeAppReceiptData = false): Promise<{ wrappedResponses: WrappedResponses; appReceiptData: string }> {
     profilerInstance.profileSectionStart('requestFinalData')
     this.mainLogger.debug(`requestFinalData: txid: ${queueEntry.logID} accountIds: ${utils.stringifyReduce(accountIds)}`);
     const message = { txid: queueEntry.acceptedTx.txId, accountIds, includeAppReceiptData }
