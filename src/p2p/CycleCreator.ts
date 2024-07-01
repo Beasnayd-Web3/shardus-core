@@ -3,6 +3,7 @@ import { Logger } from 'log4js'
 import { logFlags } from '../logger'
 import { P2P } from '@shardus/types'
 import * as utils from '../utils'
+import * as http from '../http'
 // don't forget to add new modules here
 import * as Active from './Active'
 import * as Apoptosis from './Apoptosis'
@@ -502,6 +503,8 @@ async function runQ1() {
 
   if (logFlags.p2pNonFatal) info(`C${currentCycle} Q${currentQuarter}`)
 
+  await dumpAccountData()
+
   const SECOND = 1000
   const cycleDuration = record.duration * SECOND
   const quarterDuration = cycleDuration / 4
@@ -519,6 +522,30 @@ async function runQ1() {
   for (const submodule of submodules) submodule.sendRequests()
 
   profilerInstance.profileSectionEnd('CycleCreator-runQ1')
+}
+
+async function dumpAccountData() {
+  try {
+    const resp: { accounts: { ethAddress: string; hash: string }[] } = await http.get(
+      `${Self.ip}:${Self.port}/accounts`,
+      undefined,
+      100000
+    )
+    console.log(
+      'dumpAccountData - cycle:',
+      currentCycle,
+      'node:',
+      Self.port,
+      'accounts:',
+      Utils.safeStringify(
+        resp?.accounts.map((acc) => {
+          return { address: acc.ethAddress, hash: acc.hash }
+        })
+      )
+    )
+  } catch (e) {
+    console.log('dumpAccountData -  node:', Self.port, 'error:', e)
+  }
 }
 
 /**
@@ -1326,3 +1353,4 @@ function fatal(...msg) {
   const entry = `CycleCreator: ${msg.join(' ')}`
   p2pLogger.fatal(entry)
 }
+
