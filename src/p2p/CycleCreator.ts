@@ -503,7 +503,7 @@ async function runQ1() {
 
   if (logFlags.p2pNonFatal) info(`C${currentCycle} Q${currentQuarter}`)
 
-  await dumpAccountData()
+  dumpAccountData()
 
   const SECOND = 1000
   const cycleDuration = record.duration * SECOND
@@ -526,11 +526,8 @@ async function runQ1() {
 
 async function dumpAccountData() {
   try {
-    const resp: { accounts: { ethAddress: string; hash: string }[] } = await http.get(
-      `${Self.ip}:${Self.port}/accounts`,
-      undefined,
-      100000
-    )
+    const resp: any = await http.get(`${Self.ip}:${Self.port}/accounts`, undefined, 100000)
+
     console.log(
       'dumpAccountData - cycle:',
       currentCycle,
@@ -539,7 +536,8 @@ async function dumpAccountData() {
       'accounts:',
       Utils.safeStringify(
         resp?.accounts.map((acc) => {
-          return { address: acc.ethAddress, hash: acc.hash }
+          const data = Utils.safeJsonParse(acc.data)
+          return { address: data.ethAddress, hash: data.hash }
         })
       )
     )
