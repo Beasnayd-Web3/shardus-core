@@ -503,7 +503,9 @@ async function runQ1() {
 
   if (logFlags.p2pNonFatal) info(`C${currentCycle} Q${currentQuarter}`)
 
-  dumpAccountData()
+  if (Self.isActive) {
+      dumpAccountData()
+  }
 
   const SECOND = 1000
   const cycleDuration = record.duration * SECOND
