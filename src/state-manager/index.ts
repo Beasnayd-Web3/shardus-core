@@ -3794,7 +3794,7 @@ class StateManager {
       return
     }
 
-    const cycle = CycleChain.getCycleChain(cycleShardValues.cycleNumber, cycleShardValues.cycleNumber)[0]
+    const cycle = CycleChain.getCycleChain(cycleShardValues.cycleNumber - 2, cycleShardValues.cycleNumber - 2)[0]
     if (cycle === null || cycle === undefined) {
       return
     }
@@ -4081,9 +4081,11 @@ class StateManager {
         const receipt: AppliedReceipt2 = this.getReceipt2(queueEntry)
 
         if (receipt == null) {
+          console.log(`DEBUG-TX: stuck tx(${queueEntry.logID}) queueEntry`, queueEntry)
           //check  && queueEntry.globalModification === false because global accounts will not get a receipt, should this change?
           /* prettier-ignore */ if(logFlags.error && queueEntry.globalModification === false) this.mainLogger.error(`generateReceiptMapResults found entry in with no receipt in newAcceptedTxQueue. ${utils.stringifyReduce(queueEntry.acceptedTx)}`)
         } else {
+          console.log(`DEBUG-TX: normal tx(${queueEntry.logID}) queueEntry`, queueEntry)
           queueEntriesToSave.push(queueEntry)
         }
       }

@@ -122,9 +122,9 @@ export let logFlags: LogFlags = {
   console: true,
   error: true,
 
-  playback: false,
-  playback_trace: false,
-  playback_debug: false,
+  playback: true,
+  playback_trace: true,
+  playback_debug: true,
   net_trace: false,
   // main:true,
   // main_error:true,
@@ -360,7 +360,7 @@ class Logger {
     logFlags.important_as_fatal = true
     logFlags.important_as_error = true
 
-    logFlags.playback = false
+    logFlags.playback = true
 
     //temp debug
     // logFlags.aalg = true
@@ -498,7 +498,7 @@ class Logger {
     )
     Context.network.registerExternalGet('debug-clearlog', isDebugModeMiddlewareMedium, async (req, res) => {
       const requestedFileName = req?.query?.file
-      let filesToClear = []      
+      let filesToClear = []
       try {
         if (!requestedFileName) {
           res.status(400).send('No log file specified')
@@ -506,16 +506,16 @@ class Logger {
         }
 
         // Retrieve valid filenames from the logger configuration
-      const validFileNames: string[] = []
-      for (const appender of Object.values(this.log4Conf.appenders)) {
-        if (appender.type === 'file') {
-          validFileNames.push(path.basename(appender.filename))
+        const validFileNames: string[] = []
+        for (const appender of Object.values(this.log4Conf.appenders)) {
+          if (appender.type === 'file') {
+            validFileNames.push(path.basename(appender.filename))
+          }
         }
-      }
-      // explicitly add out.log since that is handled in saveConsoleOutput.ts
-      if (this.config.saveConsoleOutput) { 
-        validFileNames.push('out.log')
-      }
+        // explicitly add out.log since that is handled in saveConsoleOutput.ts
+        if (this.config.saveConsoleOutput) {
+          validFileNames.push('out.log')
+        }
 
         // If 'all' is requested, set to clear all files, otherwise sanitize the input file name.
 
@@ -529,7 +529,6 @@ class Logger {
           }
           filesToClear.push(sanitizedFileName)
         }
-
       } catch (error) {
         console.error('Error clearing log files 1:', error)
         res.status(500).send(`Failed to clearing log files with input 1 ${requestedFileName}`)

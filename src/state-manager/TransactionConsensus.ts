@@ -85,6 +85,7 @@ import {
 import { BadRequest, InternalError, NotFound, serializeResponseError } from '../types/ResponseError'
 import { randomUUID } from 'crypto'
 import { Utils } from '@shardus/types'
+import { queueRequest } from '../p2p/Modes'
 
 class TransactionConsenus {
   app: Shardus.App
@@ -1396,6 +1397,7 @@ class TransactionConsenus {
    * @param queueEntry
    */
   async tryProduceReceipt(queueEntry: QueueEntry): Promise<AppliedReceipt> {
+    console.log(`entered tryProduceReceipt for ${queueEntry.logID}`)
     this.profiler.profileSectionStart('tryProduceReceipt')
     if (logFlags.profiling_verbose) this.profiler.scopedProfileSectionStart('tryProduceReceipt')
     try {
@@ -1403,6 +1405,7 @@ class TransactionConsenus {
         if (logFlags.debug)
           this.mainLogger.debug(`tryProduceReceipt ${queueEntry.logID} waitForReceiptOnly === true`)
         nestedCountersInstance.countEvent(`consensus`, 'tryProduceReceipt waitForReceiptOnly === true')
+        console.log(`tx ${queueEntry.logID}: 1 return: tryProduceReceipt waitForReceiptOnly === true`)
         return null
       }
 
@@ -1414,6 +1417,7 @@ class TransactionConsenus {
       if (queueEntry.appliedReceipt != null) {
         nestedCountersInstance.countEvent(`consensus`, 'tryProduceReceipt appliedReceipt != null')
         if (logFlags.debug) this.mainLogger.debug(`tryProduceReceipt ${queueEntry.logID} appliedReceipt != null`)
+        console.log(`tx ${queueEntry.logID}: 2 return: tryProduceReceipt appliedReceipt != null`)
         return queueEntry.appliedReceipt
       }
 
@@ -1422,6 +1426,7 @@ class TransactionConsenus {
           `consensus`,
           'tryProduceReceipt in the middle of robust query confirm or challenge'
         )
+        console.log(`tx ${queueEntry.logID}: 3 return: tryProduceReceipt in the middle of robust query confirm or challenge`)
         return null
       }
 
@@ -1450,11 +1455,13 @@ class TransactionConsenus {
 
         if (numVotes < requiredVotes) {
           // we need more votes
+          console.log(`tx ${queueEntry.logID}: 4 return: tryProduceReceipt numVotes < requiredVotes`)
           return null
         }
 
         // be smart an only recalculate votes when we see a new vote show up.
         if (queueEntry.newVotes === false) {
+          console.log(`tx ${queueEntry.logID}: 5 return: tryProduceReceipt newVotes === false`)
           return null
         }
         queueEntry.newVotes = false
@@ -1480,6 +1487,8 @@ class TransactionConsenus {
         }
 
         if (mostVotes < requiredVotes) {
+          console.log(`tx ${queueEntry.logID}: 6 return: tryProduceReceipt mostVotes(${mostVotes}) < requiredVotes(${requiredVotes})`)
+          console.log('for closure, this is the winningVoteHash: ', winningVoteHash)
           return null
         }
 
@@ -1530,6 +1539,7 @@ class TransactionConsenus {
             }
             queueEntry.appliedReceipt = appliedReceipt
 
+            console.log(`tx ${queueEntry.logID}: 7 return: tryProduceReceipt appliedReceipt2`)
             return appliedReceipt
           }
         }
