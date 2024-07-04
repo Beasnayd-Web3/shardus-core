@@ -2539,7 +2539,7 @@ class AccountPatcher {
       if (ourTrieNode == null) {
         /* prettier-ignore */ nestedCountersInstance.countRareEvent(`accountPatcher`, `isInSync ${radix} our trieNode === null`, 1)
         if (logFlags.debug) this.mainLogger.debug(`isInSync ${radix} our trieNode === null, cycle: ${cycle}`)
-        isInsyncResult.radixes.push({radix, insync: false, inConsensusRange, inEdgeRange})
+        isInsyncResult.radixes.push({radix, insync: false, inConsensusRange, inEdgeRange, recentRuntimeSync: false})
         isInsyncResult.insync = false
         isInsyncResult.stats.bad++
         isInsyncResult.stats.total++
@@ -2582,11 +2582,11 @@ class AccountPatcher {
           )
         }
         isInsyncResult.insync = false
-        isInsyncResult.radixes.push({radix, insync: false, inConsensusRange, inEdgeRange})
+        isInsyncResult.radixes.push({radix, insync: false, inConsensusRange, inEdgeRange, recentRuntimeSync: false})
         isInsyncResult.stats.bad++
         isInsyncResult.stats.total++
       } else if (ourTrieNode.hash === votesMap.bestHash) {
-        isInsyncResult.radixes.push({radix, insync: true, inConsensusRange, inEdgeRange})
+        isInsyncResult.radixes.push({radix, insync: true, inConsensusRange, inEdgeRange, recentRuntimeSync: false})
         isInsyncResult.stats.good++
         isInsyncResult.stats.total++
       }
@@ -2597,6 +2597,17 @@ class AccountPatcher {
     })
     //todo what about situation where we do not have enough votes??
     //todo?? more utility / get list of oos radix
+
+    // set recentRuntimeSync to true in the radices that have had recent coverage changes
+    for (const coverageChange of this.stateManager.coverageChangesCopy) {
+      const startRadix = coverageChange.start.toString().substring(0, this.treeSyncDepth)
+      const endRadix = coverageChange.end.toString().substring(0, this.treeSyncDepth)
+
+      for (let i = parseInt(startRadix, 16); i <= parseInt(endRadix, 16); i++) {
+        isInsyncResult.radixes[i].recentRuntimeSync = true
+      }
+    }
+
     return isInsyncResult // {inSync, }
   }
 
