@@ -22,6 +22,7 @@ import { getLinearGossipBurstList } from '../utils'
 import { getSocketReport } from '../utils/debugUtils'
 import { Utils } from '@shardus/types'
 import { finishedSyncingCycle } from '../p2p/Join'
+import { currentCycle } from '../p2p/CycleCreator'
 
 const http = require('../http')
 const allZeroes64 = '0'.repeat(64)
@@ -314,7 +315,7 @@ class Reporter {
     const isDataSynced = !this.stateManager.accountPatcher.failedLastTrieSync
     const cycleFinishedSyncing = finishedSyncingCycle
 
-    if (isDataSynced) this.stillNeedsInitialPatchPostActive = false
+    if (currentCycle > finishedSyncingCycle && isDataSynced) this.stillNeedsInitialPatchPostActive = false
     const stillNeedsInitialPatchPostActive = this.stillNeedsInitialPatchPostActive
 
     let rareCounters = {}
