@@ -1455,7 +1455,7 @@ class TransactionConsenus {
 
         if (numVotes < requiredVotes) {
           // we need more votes
-          console.log(`tx ${queueEntry.logID}: 4 return: tryProduceReceipt numVotes < requiredVotes`)
+          console.log(`tx ${queueEntry.logID}: 4 return: tryProduceReceipt numVotes(${numVotes}) < requiredVotes(${requiredVotes})`)
           return null
         }
 
