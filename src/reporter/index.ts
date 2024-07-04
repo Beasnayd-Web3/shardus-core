@@ -55,6 +55,7 @@ interface Reporter {
   doConsoleReport: boolean
   hasRecipient: boolean
   statisticsReport: StatisticsReport
+  stillNeedsInitialPatchPostActive: boolean
 }
 class Reporter {
   constructor(config, logger, statistics, stateManager, profiler, loadDetection) {
@@ -75,6 +76,9 @@ class Reporter {
     this.doConsoleReport = isDebugModeAnd((config) => config.profiler)
 
     this.hasRecipient = this.config.recipient != null
+
+    this.stillNeedsInitialPatchPostActive = true
+
     this.resetStatisticsReport()
   }
 
@@ -307,6 +311,10 @@ class Reporter {
     const isNodeLost = this.checkIsNodeLost(Self.id)
     const isNodeRefuted = this.checkIsNodeRefuted(Self.id)
     const isDataSynced = !this.stateManager.accountPatcher.failedLastTrieSync
+
+    if (isDataSynced) this.stillNeedsInitialPatchPostActive = false
+    const stillNeedsInitialPatchPostActive = this.stillNeedsInitialPatchPostActive
+
     let rareCounters = {}
     // convert nested Map to nested Object
     for (const [key, value] of nestedCountersInstance.rareEventCounters) {
@@ -363,7 +371,8 @@ class Reporter {
         shardusVersion: packageJson.version,
         appData,
         archiverListHash,
-        lastInSyncResult
+        lastInSyncResult,
+        stillNeedsInitialPatchPostActive
       })
       if (this.stateManager != null && config.mode === 'debug' && !config.debug.disableTxCoverageReport) {
         this.stateManager.transactionQueue.resetTxCoverageMap()
