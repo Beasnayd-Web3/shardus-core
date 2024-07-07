@@ -42,7 +42,7 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     maxRejoinTime: 20,
     difficulty: 2,
     dynamicBogonFiltering: true,
-    forceBogonFilteringOn: false, //should turn this on for releases or dev testing
+    forceBogonFilteringOn: true, //should turn this on for releases or dev testing
     rejectBogonOutboundJoin: true,
     queryDelay: 1,
     gossipRecipients: 8,
@@ -200,8 +200,8 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     loseReceiptChance: 0,
     loseTxChance: 0,
     canDataRepair: false,
-    startInFatalsLogMode: false,
-    startInErrorLogMode: true,
+    startInFatalsLogMode: true,
+    startInErrorLogMode: false,
     fakeNetworkDelay: 0,
     disableSnapshots: true,
     disableTxCoverageReport: true,
@@ -324,10 +324,10 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     stuckTxQueueFix: true,
     singleAccountStuckFix: true,
     stuckTxMoveTime: 60000,
-    forceVoteForFailedPreApply: true
+    forceVoteForFailedPreApply: true,
   },
   sharding: { nodesPerConsensusGroup: 5, nodesPerEdge: 2, executeInOneShard: false },
-  mode: ServerMode.Debug,
+  mode: ServerMode.Release,
   features: {
     dappFeature1enabled: false,
     fixHomeNodeCheckForTXGroupChanges: false,
