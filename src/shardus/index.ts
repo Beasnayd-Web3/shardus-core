@@ -442,8 +442,7 @@ class Shardus extends EventEmitter {
 
     if (isInTimeLimit === false) {
       this.mainLogger.error(`Time is not synced with the network`)
-      //this is TBD
-      // throw new Error(`Time is not synced with the network`)
+      throw new Error(`Time is not synced with the network during ntpOffsetMs generation`)
     }
 
     if (!isServiceMode()) {
