@@ -2603,8 +2603,22 @@ class AccountPatcher {
       const startRadix = coverageChange.start.toString().substring(0, this.treeSyncDepth)
       const endRadix = coverageChange.end.toString().substring(0, this.treeSyncDepth)
 
-      for (let i = parseInt(startRadix, 16); i <= parseInt(endRadix, 16); i++) {
-        isInsyncResult.radixes[i].recentRuntimeSync = true
+      // for non-wrapped ranges
+      if (startRadix <= endRadix) {
+        for (let i = 0; i <= isInsyncResult.radixes.length; i++) {
+          const radixEntry = isInsyncResult.radixes[i]
+          if (radixEntry.radix >= startRadix && radixEntry.radix <= endRadix) {
+            radixEntry.recentRuntimeSync = true
+          }
+        }
+      // for wrapped ranges because we start at the end and wrap around to the beginning of 32 byte address space
+      } else {
+        for (let i = 0; i <= isInsyncResult.radixes.length; i++) {
+          const radixEntry = isInsyncResult.radixes[i]
+          if (radixEntry.radix >= startRadix || radixEntry.radix <= endRadix) {
+            radixEntry.recentRuntimeSync = true
+          }
+        }
       }
     }
 
