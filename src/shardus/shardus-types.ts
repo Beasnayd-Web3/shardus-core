@@ -1085,6 +1085,8 @@ export interface ServerConfiguration {
     randomCycleData: boolean
     // Maximum number of elements allowed in txDebugStatList map
     debugStatListMaxSize: number
+    // flag to add bogus increments to NTP offset
+    debugNTPBogusDecrements: boolean
   }
   /** Options for the statistics module */
   statistics?: {
