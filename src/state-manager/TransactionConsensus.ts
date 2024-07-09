@@ -111,6 +111,7 @@ class TransactionConsenus {
 
   produceBadVote: boolean
   produceBadChallenge: boolean
+  debugFailPOQo: number
 
   constructor(
     stateManager: StateManager,
@@ -141,6 +142,7 @@ class TransactionConsenus {
 
     this.produceBadVote = this.config.debug.produceBadVote
     this.produceBadChallenge = this.config.debug.produceBadChallenge
+    this.debugFailPOQo = 0
   }
 
   /***
@@ -154,6 +156,28 @@ class TransactionConsenus {
    */
 
   setupHandlers(): void {
+    Context.network.registerExternalGet('debug-poqo-fail', isDebugModeMiddleware, (req, res) => {
+      try {
+        const newChance = req.query.newChance
+        if (typeof newChance !== 'string' || !newChance) {
+          res.write(`this.useNewPOQ: ${this.debugFailPOQo}\n`)
+          res.end()
+          return
+        }
+        const newChanceInt = parseFloat(newChance)
+        if (newChanceInt >= 1) {
+          res.write(`this.useNewPOQ: ${this.debugFailPOQo}\n`)
+          res.end()
+          return
+        }
+        this.debugFailPOQo = newChanceInt
+        res.write(`this.useNewPOQ: ${this.debugFailPOQo}\n`)
+      } catch (e) {
+        res.write(`this.useNewPOQ: ${this.debugFailPOQo}\n`)
+      }
+      res.end()
+    })
+
     Context.network.registerExternalGet('debug-poq-switch', isDebugModeMiddleware, (_req, res) => {
       try {
         this.stateManager.transactionQueue.useNewPOQ = !this.stateManager.transactionQueue.useNewPOQ
@@ -1347,6 +1371,12 @@ class TransactionConsenus {
             // We've already handled this
             return
           }
+
+          if (Math.random() < this.debugFailPOQo) {
+            nestedCountersInstance.countEvent('poqo', 'debug fail wont forward receipt')
+            return
+          }
+
           if (logFlags.verbose) this.mainLogger.debug(`POQo: Received receipt from aggregator for ${queueEntry.logID} starting CT2 for data & receipt`)
           const executionGroupNodes = new Set(queueEntry.executionGroup.map((node) => node.publicKey))
           const hasTwoThirdsMajority = this.verifyAppliedReceipt(payload, executionGroupNodes)
@@ -1961,6 +1991,10 @@ class TransactionConsenus {
       }
 
       if (this.stateManager.transactionQueue.usePOQo === true) {
+        if (Math.random() < this.debugFailPOQo) {
+          nestedCountersInstance.countEvent('poqo', 'debug fail no receipt produced')
+          return null
+        }
         if (queueEntry.ourVote === undefined) {
           // Cannot produce receipt just yet. Wait further.
           // In V2 of POQo, we may not have to check this.
@@ -3367,6 +3401,10 @@ class TransactionConsenus {
         // Can skip over the remaining part of the function because this loop will
         // handle sending the vote to the intended receivers
         if (logFlags.verbose) this.mainLogger.debug(`POQO: Sending vote for ${queueEntry.logID}`)
+        if (Math.random() < this.debugFailPOQo) {
+          nestedCountersInstance.countEvent('poqo', 'debug fail no vote')
+          return
+        }
         this.poqoVoteSendLoop(queueEntry, appliedVoteHash)
         return
       }
