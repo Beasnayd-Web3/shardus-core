@@ -931,6 +931,9 @@ export interface ServerConfiguration {
     broadcastFinalStateBinary: boolean
     lostReportBinary: boolean
     repairMissingAccountsBinary: boolean
+    poqoSendReceiptBinary: boolean
+    poqoDataAndReceiptBinary: boolean
+    poqoSendVoteBinary: boolean
     /** number of nodes on both ends of the rotationIndex
      *  that will not respond to queries like account data, inject etc
      *  is only activated when more than 10 nodes active  */
@@ -945,6 +948,8 @@ export interface ServerConfiguration {
     formingNodesPerCycle: number
     // /** Enables or disables filtering nodes from internal gossip if they are marked down. */
     downNodeFilteringEnabled: boolean
+    /** Whether to use upgraded FACT corresponding tell algorithm */
+    useFactCorrespondingTell: boolean
     // /** The number of ms to wait to resubmit a standby add request to an active node if we get an error */
     resubmitStandbyAddWaitDuration: number
     // /** The percentage of votes required to confirm transaction*/
@@ -1194,6 +1199,12 @@ export interface ServerConfiguration {
     minRequiredChallenges: number
     // turn on the improved Proof of Quorum for large shards sizes
     useNewPOQ: boolean
+    // turn on POQo consensus
+    usePOQo: boolean
+    // Interval between switching to the next vote aggregator batch
+    poqoloopTime: number,
+    // batch size for vote aggregation
+    poqobatchCount: number,
     // should the network forward TXs to lucky nodes?  (does not impact nonce queue, that is the flag below)
     forwardToLuckyNodes: boolean
     // should the network forward TXs to lucky nodes?  (only for the nonce queue)

@@ -172,14 +172,18 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     requestReceiptForTxBinary: true,
     lostReportBinary: true,
     repairMissingAccountsBinary: true,
+    poqoSendReceiptBinary : true,
+    poqoDataAndReceiptBinary: true,
+    poqoSendVoteBinary: true,
     rotationEdgeToAvoid: 3,
     forcedMode: '',
     delayZombieRestartSec: 180,
     resumbitStandbyRefreshWaitDuration: 1000, // 1 second in ms
     formingNodesPerCycle: 7,
     downNodeFilteringEnabled: false,
+    useFactCorrespondingTell: true,
     resubmitStandbyAddWaitDuration: 1000, // 1 second in ms
-    requiredVotesPercentage: 2 / 3.0,
+    requiredVotesPercentage: 2 / 3,
   },
   ip: {
     externalIp: '0.0.0.0',
@@ -295,6 +299,9 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     waitLimitAfterFirstMessage: 2000,
     minRequiredChallenges: 1,
     useNewPOQ: false,
+    usePOQo: true,
+    poqoloopTime: 2000,
+    poqobatchCount: 1,
     forwardToLuckyNodes: true,
     forwardToLuckyNodesNonceQueue: false,
     forwardToLuckyNodesCheckRotation: true,
@@ -324,7 +331,7 @@ const SERVER_CONFIG: StrictServerConfiguration = {
     stuckTxQueueFix: true,
     singleAccountStuckFix: true,
     stuckTxMoveTime: 60000,
-    forceVoteForFailedPreApply: true
+    forceVoteForFailedPreApply: true,
   },
   sharding: { nodesPerConsensusGroup: 5, nodesPerEdge: 2, executeInOneShard: false },
   mode: ServerMode.Debug,

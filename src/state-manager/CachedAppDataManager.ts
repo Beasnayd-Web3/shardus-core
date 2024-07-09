@@ -1,4 +1,4 @@
-import { StateManager as StateManagerTypes } from '@shardus/types'
+import { StateManager as StateManagerTypes, P2P as P2PTypes } from '@shardus/types'
 import { Route } from '@shardus/types/build/src/p2p/P2PTypes'
 import { Logger as Log4jsLogger } from 'log4js'
 import StateManager from '.'
@@ -47,6 +47,8 @@ import {
   serializeGetCachedAppDataResp,
 } from '../types/GetCachedAppDataResp'
 import { Utils } from '@shardus/types'
+import { getCorrespondingNodes, verifyCorrespondingSender } from '../utils/fastAggregatedCorrespondingTell'
+import * as NodeList from '../p2p/NodeList'
 
 class CachedAppDataManager {
   app: Shardus.App
@@ -141,6 +143,14 @@ class CachedAppDataManager {
 
           if (cachedAppData == null) {
             return errorHandler(RequestErrorEnum.InvalidRequest)
+          }
+
+          if(this.config.p2p.useFactCorrespondingTell) {
+            const isValidSender = this.factValidateCorrespondingCachedAppDataSender(cachedAppData.dataID, header.sender_id, req.executionShardKey, req.txId)
+            if (isValidSender === false) {
+              /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`send_cachedAppData invalid sender ${header.sender_id} for data: ${cachedAppData.dataID}`)
+              return
+            }
           }
 
           const existingCachedAppData = this.getCachedItem(req.topic, cachedAppData.dataID)
@@ -315,6 +325,162 @@ class CachedAppDataManager {
     }
 
     cacheTopic.maxItemSize = maxItemSize
+  }
+
+  factValidateCorrespondingCachedAppDataSender(dataID: string, senderNodeId: string, executionShardKey : string, txId: string) {
+    const senderGroup = this.stateManager.transactionQueue.getConsenusGroupForAccount(executionShardKey)
+    const senderNode = NodeList.nodes.get(senderNodeId)
+    const logID = utils.stringifyReduce(txId)
+    if (senderNode === null) {
+      this.mainLogger.error(`factValidateCorrespondingTellFinalDataSender: logId: ${logID} sender node is null`)
+      return false
+    }
+    const senderIsInExecutionGroup = senderGroup.some((node) => node.id === senderNodeId)
+    if (senderIsInExecutionGroup === false) {
+      this.mainLogger.error(`factValidateCorrespondingTellFinalDataSender: logId: ${logID} sender is not in the execution group`)
+      return false
+    }
+
+    const targetGroup = this.stateManager.transactionQueue.getConsenusGroupForAccount(dataID)
+    const allNodes = Array.from(new Set([...senderGroup, ...targetGroup])).sort((a, b) => a.id.localeCompare(b.id));
+    const senderIndexInTxGroup = allNodes.findIndex((node) => node.id === senderNodeId)
+    const ourIndexInTxGroup = allNodes.findIndex((node) => node.id === this.stateManager.currentCycleShardData.nodeShardData.node.id)
+    const senderGroupSize = senderGroup.length
+    const targetGroupSize = targetGroup.length
+    const {startIndex: targetStartIndex, endIndex: targetEndIndex} = 
+      this.stateManager.transactionQueue.getStartAndEndIndexOfTargetGroup(targetGroup.map(node => node.id), allNodes)
+    const globalOffset = parseInt(txId.slice(-4), 16)
+
+    // check if it is a FACT sender
+    const isValidFactSender = verifyCorrespondingSender(
+      ourIndexInTxGroup,
+      senderIndexInTxGroup,
+      globalOffset,
+      targetGroupSize,
+      senderGroupSize,
+      targetStartIndex,
+      targetEndIndex,
+      allNodes.length
+    )
+
+    // it is not a FACT corresponding node
+    if (isValidFactSender === false) {
+      this.mainLogger.error(`factValidateCorrespondingCachedAppDataSender: logId: logId: ${logID} sender is not a valid sender isValidSender:  ${isValidFactSender}`);
+      nestedCountersInstance.countEvent('stateManager', 'factValidateCorrespondingCachedAppDataSender: sender is not a valid sender or a neighbour node')
+      return false
+    }
+    return true
+  }
+
+  factSendCorrespondingCachedAppData(
+    topic: string,
+    dataID: string,
+    appData: unknown,
+    cycle: number,
+    _formId: string,
+    txId: string
+  ): void {
+    if (this.stateManager.currentCycleShardData == null) {
+      throw new Error('factSendCorrespondingCachedAppData: currentCycleShardData == null')
+    }
+    if (dataID == null) {
+      throw new Error('factSendCorrespondingCachedAppData: dataId == null')
+    }
+    const queueEntry: QueueEntry = this.stateManager.transactionQueue.getQueueEntry(txId)
+
+    if (!queueEntry.executionGroup) {
+      return
+    }
+
+    const ourNodeData = this.stateManager.currentCycleShardData.nodeShardData
+
+    const senderGroup = this.stateManager.transactionQueue.getConsenusGroupForAccount(queueEntry.executionShardKey)
+    const targetGroup = this.stateManager.transactionQueue.getConsenusGroupForAccount(dataID)
+    const allNodes = Array.from(new Set([...senderGroup, ...targetGroup])).sort((a, b) => a.id.localeCompare(b.id));
+    const senderIndexInTxGroup = allNodes.findIndex((node) => node.id === ourNodeData.node.id)
+    const senderGroupSize = senderGroup.length
+    const targetGroupSize = targetGroup.length
+    const {startIndex: targetStartIndex, endIndex: targetEndIndex} = 
+      this.stateManager.transactionQueue.getStartAndEndIndexOfTargetGroup(targetGroup.map(node => node.id), allNodes)
+
+
+    const correspondingIndices = getCorrespondingNodes(
+      senderIndexInTxGroup,
+      targetStartIndex,
+      targetEndIndex,
+      queueEntry.correspondingGlobalOffset,
+      targetGroupSize,
+      senderGroupSize,
+      allNodes.length
+    )
+
+    const correspondingNodes: P2PTypes.NodeListTypes.Node[] = []
+    for (const index of correspondingIndices) {
+      const node = allNodes[index]
+      if (targetGroup.includes(node as P2PTypes.NodeListTypes.Node)) {
+        correspondingNodes.push(node as P2PTypes.NodeListTypes.Node)
+      }
+    }
+
+    const cacheAppDataToSend: CachedAppData = {
+      dataID,
+      appData,
+      cycle,
+    }
+
+    const message: CacheAppDataResponse = { topic, cachedAppData: cacheAppDataToSend }
+
+    if (correspondingNodes.length > 0) {
+      // Handle edge case where we send to own node
+      if (correspondingNodes.length === 1 && correspondingNodes[0].id === ourNodeData.node.id) {
+        const existingCachedAppData = this.getCachedItem(topic, dataID)
+        if (existingCachedAppData) {
+          console.log(`We have already processed this cached data`, existingCachedAppData)
+          return
+        }
+        this.insertCachedItem(topic, dataID, appData, cycle)
+        return
+      }
+
+      // Filter nodes before we send tell()
+      const filteredNodes = this.stateManager.filterValidNodesForInternalMessage(
+        correspondingNodes,
+        'factSendCorrespondingCachedAppData',
+        true,
+        true
+      )
+      if (filteredNodes.length === 0) {
+        /* prettier-ignore */
+        if (logFlags.error) this.mainLogger.error("cachedAppData: factSendCorrespondingCachedAppData: filterValidNodesForInternalMessage no valid nodes left to try");
+        /* prettier-ignore */ if(logFlags.shardedCache) console.log("cachedAppData: factSendCorrespondingCachedAppData: filterValidNodesForInternalMessage no valid nodes left to try");
+        return null
+      }
+      const filteredCorrespondingAccNodes = filteredNodes
+
+      if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.sendCachedAppDataBinary) {
+        if(logFlags.shardedCache) console.log(`cachedAddData: factSendCorrespondingCachedAppData sending ${dataID}`)
+        const sendCacheAppDataReq: SendCachedAppDataReq = {
+          topic,
+          txId,
+          executionShardKey: queueEntry.executionShardKey,
+          cachedAppData: {
+            dataID: message.cachedAppData.dataID,
+            appData: message.cachedAppData.appData,
+            cycle: message.cachedAppData.cycle,
+          },
+        }
+        this.p2p.tellBinary<SendCachedAppDataReq>(
+          filteredCorrespondingAccNodes,
+          InternalRouteEnum.binary_send_cachedAppData,
+          sendCacheAppDataReq,
+          serializeSendCachedAppDataReq,
+          {}
+        )
+        return
+      }
+
+      this.p2p.tell(filteredCorrespondingAccNodes, 'send_cachedAppData', message)
+    }
   }
 
   async sendCorrespondingCachedAppData(
@@ -507,6 +673,8 @@ class CachedAppDataManager {
             if (this.config.p2p.useBinarySerializedEndpoints && this.config.p2p.sendCachedAppDataBinary) {
               const sendCacheAppDataReq: SendCachedAppDataReq = {
                 topic,
+                txId,
+                executionShardKey: queueEntry.executionShardKey,
                 cachedAppData: {
                   dataID: message.cachedAppData.dataID,
                   appData: message.cachedAppData.appData,

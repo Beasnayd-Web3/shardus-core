@@ -266,7 +266,7 @@ function createGossipTracker() {
 
 // Our own P2P version of the network tell, with a sign added
 export async function tell(
-  nodes: ShardusTypes.Node[],
+  nodes: ShardusTypes.Node[] | ShardusTypes.NodeWithRank[],
   route,
   message,
   logged = false,
@@ -296,7 +296,7 @@ export async function tell(
 }
 
 export async function tellBinary<TReq>(
-  nodes: ShardusTypes.Node[],
+  nodes: ShardusTypes.Node[] | ShardusTypes.NodeWithRank[],
   route: string,
   message: TReq,
   serializerFunc: (stream: VectorBufferStream, obj: TReq, root?: boolean) => void,
@@ -324,7 +324,8 @@ export async function tellBinary<TReq>(
     /* prettier-ignore */ nestedCountersInstance.countEvent('comms-route x recipients (logical count)', `tellBinary ${route} recipients:${nodes.length}`)
   }
 
-  const nonSelfNodes = nodes.filter((node) => node.id !== Self.id)
+  const typecasted_nodes = nodes as ShardusTypes.Node[]
+  const nonSelfNodes = typecasted_nodes.filter((node) => node.id !== Self.id)
   try {
     const wrappedReq = requestSerializer(message, serializerFunc)
     await network.tellBinary(nonSelfNodes, route, wrappedReq.getBuffer(), appHeader, tracker, logged)
@@ -737,7 +738,7 @@ export function isNodeValidForInternalMessage(
   //
   //const isInRotationBounds = checkNodesRotationBounds && isNodeInRotationBounds(node.id)
   //if (isInRotationBounds) {
-  //  /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} rotation`)    
+  //  /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} rotation`)
   //  return false
   //}
 
@@ -782,7 +783,7 @@ export function isNodeValidForInternalMessage(
       if (logErrors)
         if (logFlags.error)
           /* prettier-ignore */ error(`isNodeValidForInternalMessage isNodeDown == true state:${state} ${utils.stringifyReduce(node.id)} ${debugMsg}`)
-      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} down`)    
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} down`)
       return false
     }
   }
@@ -791,7 +792,7 @@ export function isNodeValidForInternalMessage(
       if (logErrors)
         if (logFlags.error)
           /* prettier-ignore */ error(`isNodeValidForInternalMessage isNodeLost == true ${utils.stringifyReduce(node.id)} ${debugMsg}`)
-      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} lost`)    
+      /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: validnode ${NodeList.activeIdToPartition.get(node.id)} lost`)
       return false
     }
   }
@@ -850,7 +851,8 @@ export async function sendGossip(
   isOrigin = false,
   factor = -1,
   txId = '',
-  context = ''
+  context = '',
+  commonOrigin = false
 ) {
   //console.log('entered sendGossip gossiping ', type)
   let msgSize = cUninitializedSize
@@ -914,8 +916,9 @@ export async function sendGossip(
   //console.log('originIdx ', originIdx)
 
   if (context != '')
-    /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipContext:${context}`)
-  if (originIdx !== undefined && originIdx >= 0) {
+    if (logFlags.seqdiagram)
+      /* prettier-ignore */ seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipContext:${context}`)
+  if (originIdx !== undefined && originIdx >= 0 && !commonOrigin) {
     // If it is protocol tx signed by a node in the network
     recipientIdxs = utils.getLinearGossipBurstList(nodeIdxs.length, gossipFactor, myIdx, originIdx)
     if (logFlags.seqdiagram && txId != '') {
@@ -930,7 +933,6 @@ export async function sendGossip(
       /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipLout:${recipientIdxs}`)
     }
   }
-
 
   //console.log('recipientIdxs ', recipientIdxs)
 
@@ -1000,15 +1002,13 @@ export async function sendGossip(
     if (logFlags.seqdiagram && txId != '') {
       let prefix = ''
       let suffix = ''
-      if (isOrigin)
-        prefix = 'orig:'
-      if (context != '')
-        suffix = `:${suffix}`
-      for (const node of recipients) {        
+      if (isOrigin) prefix = 'orig:'
+      if (context != '') suffix = `:${suffix}`
+      for (const node of recipients) {
         /* prettier-ignore */ if (logFlags.seqdiagram) seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${txId} ${NodeList.activeIdToPartition.get(Self.id)}-->>${NodeList.activeIdToPartition.get(node.id)}: g:${prefix}${type}${suffix}`)
       }
     }
-    
+
     if (config.p2p.useBinarySerializedEndpoints === true) {
       msgSize = await tellBinary<GossipReqBinary>(
         recipients,
