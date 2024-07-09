@@ -2294,11 +2294,11 @@ class StateManager {
       res.write(response)
       res.end()
     })
-    Context.network.registerExternalGet('debug-ntp-bad-offset', isDebugModeMiddleware, (_req, res) => {
-      this.config.debug.debugNTPBogusDecrements = !this.config.debug.debugNTPBogusDecrements
-      res.send({ status: 'NTP Bogus Offset changed', flag: this.config.debug.debugNTPBogusDecrements })
-      res.end()
-    })
+    // Context.network.registerExternalGet('debug-ntp-bad-offset', isDebugModeMiddleware, (_req, res) => {
+    //   this.config.debug.debugNTPBogusDecrements = !this.config.debug.debugNTPBogusDecrements
+    //   res.send({ status: 'NTP Bogus Offset changed', flag: this.config.debug.debugNTPBogusDecrements })
+    //   res.end()
+    // })
   }
 
   _unregisterEndpoints() {
