@@ -34,7 +34,7 @@ import {
   RequestReceiptForTxReq,
   RequestReceiptForTxResp,
   WrappedResponses,
-  TimestampRemoveRequest
+  TimestampRemoveRequest,
 } from './state-manager-types'
 import { ipInfo, shardusGetTime } from '../network'
 import { robustQuery } from '../p2p/Utils'
@@ -1035,6 +1035,7 @@ class TransactionConsenus {
             /* prettier-ignore */ if (logFlags.error) this.mainLogger.error(`poqo-receipt-gossip no queue entry for ${payload.txid}`)
             return
           }
+
           if (queueEntry.hasSentFinalReceipt === true) {
             // We've already send this receipt, no need to send it again
             return
@@ -1056,12 +1057,38 @@ class TransactionConsenus {
             '',
             true
           )
+
           queueEntry.hasSentFinalReceipt = true
+
+          // If the queue entry does not have the valid final data then request that
+          if (!queueEntry.hasValidFinalData) {
+            setTimeout(async () => {
+              // Check if we have final data
+              if (queueEntry.hasValidFinalData) {
+                return
+              }
+              if (logFlags.verbose)
+                this.mainLogger.debug(`poqo-receipt-gossip: requesting final data for ${queueEntry.logID}`)
+              nestedCountersInstance.countEvent(
+                'request-final-data',
+                'final data timeout, making explicit request'
+              )
+
+              const nodesToAskIds = payload.signatures?.map((signature) => signature.sig)
+
+              await this.stateManager.transactionQueue.requestFinalData(
+                queueEntry,
+                payload.appliedVote.account_id,
+                nodesToAskIds
+              )
+
+              nestedCountersInstance.countEvent('request-final-data', 'final data received')
+            }, this.config.stateManager.nonExWaitForData)
+          }
         } finally {
           profilerInstance.scopedProfileSectionEnd('poqo-receipt-gossip')
         }
-      }
-    )
+    })
 
     Comms.registerInternal(
       'poqo-data-and-receipt',
@@ -3515,6 +3542,7 @@ class TransactionConsenus {
         if (receivedVoter)
           /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f worser_voter ${NodeList.activeIdToPartition.get(receivedVoter.id)}`)
         else
+          // eslint-disable-next-line no-dupe-else-if
           /* prettier-ignore */ if (logFlags.seqdiagram) this.seqLogger.info(`0x53455103 ${shardusGetTime()} tx:${queueEntry.acceptedTx.txId} Note over ${NodeList.activeIdToPartition.get(Self.id)}: gossipHandlerAV:f worser_voter`)
         return false
       }
