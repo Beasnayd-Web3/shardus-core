@@ -992,7 +992,7 @@ class TransactionQueue {
         this.nonceQueue.set(nonceQueueEntry.accountId, queue)
         if (logFlags.debug) this.mainLogger.debug(`adding new nonce tx: ${nonceQueueEntry.txId} ${nonceQueueEntry.accountId} with nonce ${nonceQueueEntry.nonce}`)
       } else if (queue && queue.length > 0) {
-        let index = utils.binarySearch(queue, nonceQueueEntry, (a, b) => Number(a.nonce) - Number(b.nonce))
+        const index = utils.binarySearch(queue, nonceQueueEntry, (a, b) => Number(a.nonce) - Number(b.nonce))
         if (index != -1) {
           // there is existing item with the same nonce. replace it with the new one
           queue[index] = nonceQueueEntry
@@ -7238,7 +7238,8 @@ class TransactionQueue {
     return [...this.forwardedReceiptsByTimestamp.values()]
   }
 
-  async requestFinalData(queueEntry: QueueEntry, accountIds: string[]) {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  async requestFinalData(queueEntry: QueueEntry, accountIds: string[], nodesToAskIds: string[] | null = null) {
     profilerInstance.profileSectionStart('requestFinalData')
     this.mainLogger.debug(`requestFinalData: txid: ${queueEntry.logID} accountIds: ${utils.stringifyReduce(accountIds)}`);
     const message = { txid: queueEntry.acceptedTx.txId, accountIds }
@@ -7247,6 +7248,7 @@ class TransactionQueue {
 
     // first check if we have received final data
     for (const accountId of accountIds) {
+      // eslint-disable-next-line security/detect-object-injection
       if (queueEntry.collectedFinalData[accountId] != null) {
         successCount++
       }
@@ -7259,9 +7261,19 @@ class TransactionQueue {
     }
 
     try {
-      const randomIndex = Math.floor(Math.random() * queueEntry.executionGroup.length)
-      const randomExeNode = queueEntry.executionGroup[randomIndex]
-      const nodeToAsk: Shardus.Node = nodes.get(randomExeNode.id)
+      let nodeToAsk: Shardus.Node
+      if (nodesToAskIds && nodesToAskIds.length > 0) {
+        const randomIndex = Math.floor(Math.random() * nodesToAskIds.length)
+        // eslint-disable-next-line security/detect-object-injection
+        const randomNodeToAskId = nodesToAskIds[randomIndex]
+        nodeToAsk = nodes.get(randomNodeToAskId)
+      } else {
+        const randomIndex = Math.floor(Math.random() * queueEntry.executionGroup.length)
+        // eslint-disable-next-line security/detect-object-injection
+        const randomExeNode = queueEntry.executionGroup[randomIndex]
+        nodeToAsk = nodes.get(randomExeNode.id)
+      }
+      
       if (!nodeToAsk) {
         if (logFlags.error)
           this.mainLogger.error('requestFinalData: could not find node from execution group')
@@ -7307,7 +7319,7 @@ class TransactionQueue {
           queueEntry.collectedFinalData[data.accountId] = data
           successCount++
           /* prettier-ignore */
-          if (true) this.mainLogger.debug(`requestFinalData: txid: ${queueEntry.logID} success accountId: ${data.accountId} stateId: ${data.stateId}`);
+          if (logFlags.debug) this.mainLogger.debug(`requestFinalData: txid: ${queueEntry.logID} success accountId: ${data.accountId} stateId: ${data.stateId}`);
         }
       }
       if (successCount === accountIds.length) {
@@ -8116,6 +8128,7 @@ class TransactionQueue {
       }
     })
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   removeTxFromArchivedQueue(txId: string) {
     // remove from the archived queue array and map by txId
     const index = this.archivedQueueEntries.findIndex((queueEntry) => queueEntry.acceptedTx.txId === txId)
